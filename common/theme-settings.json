@@ -1,0 +1,121 @@
+{
+  "meta": {},
+  "theme": {
+    "aside": {
+      "border-radius": "6px",
+      "border-style": "double",
+      "border-width": "3px"
+    },
+    "border-radius": "0",
+    "button": {
+      "border-radius": "8px",
+      "border-style": "solid",
+      "border-width": "2px"
+    },
+    "code": {
+      "border-radius": "2px",
+      "border-style": "dashed",
+      "border-width": "2px",
+      "indentationWidth": 2
+    },
+    "color": {
+      "aside-deprecated-background": "var(--color-fill-secondary)",
+      "aside-deprecated-border": "var(--color-figure-orange)",
+      "aside-important-background": "var(--color-fill-secondary)",
+      "aside-important-border": "var(--color-figure-yellow)",
+      "aside-note-background": "var(--color-fill-secondary)",
+      "aside-note-border": "var(--color-figure-gray)",
+      "aside-tip-background": "var(--color-fill-secondary)",
+      "aside-tip-border": "var(--color-solarized-violet)",
+      "aside-warning-background": "var(--color-fill-secondary)",
+      "aside-warning-border": "var(--color-figure-red)",
+      "badge-deprecated": "var(--color-figure-orange)",
+      "button-border": "var(--color-button-background)",
+      "documentation-intro-accent": "var(--color-fill)",
+      "documentation-intro-eyebrow": "var(--color-text)",
+      "documentation-intro-figure": "var(--color-figure-gray)",
+      "documentation-intro-fill": "var(--color-fill-secondary)",
+      "documentation-intro-title": "var(--color-header-text)",
+      "figure-blue": "var(--color-solarized-blue)",
+      "figure-gray": {
+        "light": "var(--color-solarized-base00)",
+        "dark": "var(--color-solarized-base0)"
+      },
+      "figure-gray-secondary": {
+        "light": "var(--color-solarized-base1)",
+        "dark": "var(--color-solarized-base01)"
+      },
+      "figure-green": "var(--color-solarized-green)",
+      "figure-orange": "var(--color-solarized-orange)",
+      "figure-red": "var(--color-solarized-red)",
+      "figure-yellow": "var(--color-solarized-yellow)",
+      "fill": {
+        "light": "var(--color-solarized-base3)",
+        "dark": "var(--color-solarized-base03)"
+      },
+      "fill-blue": "var(--color-figure-blue)",
+      "fill-gray-tertiary": "var(--color-figure-gray-secondary)",
+      "fill-gray-quaternary": "var(--color-fill-secondary)",
+      "fill-quaternary": "var(--color-fill)",
+      "fill-secondary": {
+        "light": "var(--color-solarized-base2)",
+        "dark": "var(--color-solarized-base02)"
+      },
+      "fill-tertiary": "var(--color-fill-secondary)",
+      "grid": "var(--color-figure-gray-secondary)",
+      "header-text": {
+        "light": "var(--color-solarized-base01)",
+        "dark": "var(--color-solarized-base1)"
+      },
+      "nav-solid-background": "var(--color-fill)",
+      "nav-keyline": "var(--color-grid)",
+      "nav-root-title": "var(--color-solarized-cyan)",
+      "nav-sticking-expanded-keyline": "var(--color-nav-keyline)",
+      "navigator-item-hover": "var(--color-fill-secondary)",
+      "solarized-base03": "rgb(0, 43, 54)",
+      "solarized-base02": "rgb(7, 54, 66)",
+      "solarized-base01": "rgb(88, 110, 117)",
+      "solarized-base00": "rgb(101, 123, 131)",
+      "solarized-base0": "rgb(131, 148, 150)",
+      "solarized-base1": "rgb(147, 161, 161)",
+      "solarized-base2": "rgb(238, 232, 213)",
+      "solarized-base3": "rgb(253, 246, 227)",
+      "solarized-yellow": "rgb(181, 137, 0)",
+      "solarized-orange": "rgb(203, 75, 22)",
+      "solarized-red": "rgb(220, 50, 47)",
+      "solarized-magenta": "rgb(211, 54, 130)",
+      "solarized-violet": "rgb(108, 113, 196)",
+      "solarized-blue": "rgb(38, 139, 210)",
+      "solarized-cyan": "rgb(42, 161, 152)",
+      "solarized-green": "rgb(133, 153, 0)",
+      "step-focused": "var(--color-solarized-cyan)",
+      "syntax-characters": "var(--color-solarized-cyan)",
+      "syntax-comments": "var(--color-solarized-base01)",
+      "syntax-keywords": "var(--color-solarized-green)",
+      "syntax-other-type-names": "var(--color-solarized-yellow)",
+      "syntax-strings": "var(--color-solarized-cyan)",
+      "tutorial-background": "var(--color-fill)",
+      "tutorial-hero-background": "var(--color-solarized-base03)",
+      "tutorials-overview-content": "var(--color-figure-gray)",
+      "tutorials-overview-content-alt": "var(--color-tutorials-overview-content)",
+      "tutorials-overview-eyebrow": "var(--color-tutorials-overview-content)",
+      "tutorials-overview-fill": "var(--color-fill)",
+      "tutorials-overview-fill-secondary": "var(--color-fill-secondary)",
+      "tutorials-overview-header-text": "var(--color-header-text)",
+      "tutorials-overview-navigation-link": "var(--tutorials-overview-content)",
+      "tutorials-overview-navigation-link-active": "var(--color-solarized-cyan)",
+      "tutorials-overview-navigation-link-hover": "var(--color-tutorials-overview-navigation-link-active)"
+    },
+    "typography": {
+      "html-font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Helvetica, Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\"",
+      "html-font-mono": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace"
+    }
+  },
+  "features": {
+    "docs": {
+      "quickNavigation": true,
+      "onThisPageNavigator": true,
+      "i18n": false
+    }
+  }
+}

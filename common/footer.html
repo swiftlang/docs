@@ -1,0 +1,363 @@
+<style>
+@media all{
+ul,li,h3,p,form,input,legend{margin:0;padding:0;}
+ul{list-style:none;}
+footer,nav{display:block;}
+nav a:link,nav a:visited,nav a:hover,nav a:active{text-decoration:none;}
+@media only print{
+html body *{-webkit-print-color-adjust:exact;}
+a{color:#000!important;text-decoration:underline!important;}
+h3,p{page-break-inside:avoid;}
+}
+footer.global-footer{background-color:#1e162e;padding:20px;text-align:center;padding:6rem 3rem 3rem 3.5em;color:#ebecf0;position:relative;z-index:10;}
+footer.global-footer .container{max-width:980px;margin:0 auto;}
+footer.global-footer .footer-navigation-container{display:flex;justify-content:space-between;flex-wrap:wrap;margin-bottom:5em;}
+footer.global-footer .footer-navigation-container .logo{display:flex;height:36px;margin-bottom:15px;}
+footer.global-footer .footer-navigation-container .logo svg{height:100%;}
+footer.global-footer .footer-navigation-container .logo #logotype{fill:#ebecf0;}
+footer.global-footer .footer-navigation-container h3{height:36px;margin-bottom:15px;color:#fca76c;font-size:1.17em;line-height:1.2;font-weight:bold;display:flex;align-items:center;}
+footer.global-footer .footer-navigation-container nav{margin-bottom:20px;text-align:left;}
+footer.global-footer .footer-navigation-container nav ul{list-style:none;padding:0;}
+footer.global-footer .footer-navigation-container nav ul li a{font-size:14px;border-bottom:1px solid rgba(0,0,0,0);color:#ebecf0;display:inline-block;padding:.35em 0;}
+footer.global-footer .footer-navigation-container nav ul li a:hover{border-bottom-color:#ebecf0;}
+footer.global-footer .footer-navigation-container nav.governance{display:flex;flex-direction:column;}
+footer.global-footer .footer-navigation-container nav.governance .color-scheme-toggle{display:inline-flex;font-size:14px;border:1px solid #d1d2d4;border-radius:15px;padding:1px;outline:none;margin-top:auto;}
+footer.global-footer .footer-navigation-container nav.governance .color-scheme-toggle input,footer.global-footer .footer-navigation-container nav.governance .color-scheme-toggle legend{position:absolute;clip:rect(1px, 1px, 1px, 1px);clip-path:inset(0px 0px 99.9% 99.9%);overflow:hidden;height:1px;width:1px;padding:0;border:0;appearance:none;}
+footer.global-footer .footer-navigation-container nav.governance .color-scheme-toggle .scheme-light .color-scheme-toggle-label{border-top-left-radius:15px;border-bottom-left-radius:15px;}
+footer.global-footer .footer-navigation-container nav.governance .color-scheme-toggle .scheme-auto-wrapper .color-scheme-toggle-label{border-top-right-radius:15px;border-bottom-right-radius:15px;}
+footer.global-footer .footer-navigation-container nav.governance .color-scheme-toggle-label{border:1px solid rgba(0,0,0,0);background-color:#1e162e;color:#d1d2d4;display:inline-block;text-align:center;padding:1px 6px;min-width:42px;box-sizing:border-box;transition:background-color .3s ease;}
+footer.global-footer .footer-navigation-container nav.governance .color-scheme-toggle-label:hover{cursor:pointer;}
+footer.global-footer .footer-navigation-container nav.governance input:checked+.color-scheme-toggle-label{background:#fca76c;color:#1e162e;}
+footer.global-footer .sub-navigation{display:flex;justify-content:space-between;align-items:center;align-items:flex-end;color:#d1d2d4;}
+footer.global-footer .sub-navigation nav{display:inline-block;}
+footer.global-footer .sub-navigation nav ul{list-style:none;padding:0;margin:0;display:inline-flex;}
+footer.global-footer .sub-navigation nav ul a{color:#d1d2d4;}
+footer.global-footer .sub-navigation .legals{font-size:11px;text-align:left;}
+footer.global-footer .sub-navigation .legals .copyright{margin-bottom:1.5em;line-height:1.5em;}
+footer.global-footer .sub-navigation .legals .copyright p{margin:0;}
+footer.global-footer .sub-navigation .legals nav ul li{margin-right:1.75em;}
+footer.global-footer .sub-navigation .legals nav ul li a{padding:.35em 0;border-bottom:1px solid rgba(0,0,0,0);}
+footer.global-footer .sub-navigation .legals nav ul li a:hover{border-bottom-color:#d1d2d4;}
+footer.global-footer .sub-navigation .socials ul li a{display:block;padding:0 .6em;}
+footer.global-footer .sub-navigation .socials ul li a i.bluesky{width:22px;height:22px;background-repeat:no-repeat;background-size:22px;display:block;background-image:url("/assets/images/icon-bluesky.svg");}
+footer.global-footer .sub-navigation .socials ul li a i.feed{width:22px;height:22px;background-repeat:no-repeat;background-size:22px;display:block;background-image:url("/assets/images/icon-feed.svg");}
+footer.global-footer .sub-navigation .socials ul li a i.mastodon{width:22px;height:22px;background-repeat:no-repeat;background-size:22px;display:block;background-image:url("/assets/images/icon-mastodon.svg");}
+footer.global-footer .sub-navigation .socials ul li a i.x{width:22px;height:22px;background-repeat:no-repeat;background-size:22px;display:block;background-image:url("/assets/images/icon-x.svg");}
+@media only screen and (max-width: 1024px){
+footer.global-footer .footer-navigation-container{flex-direction:column;align-items:center;margin-bottom:3em;}
+footer.global-footer .footer-navigation-container .logo{margin-bottom:3em;}
+footer.global-footer .footer-navigation-container h3{height:auto;display:block;align-items:unset;}
+footer.global-footer .footer-navigation-container nav{text-align:center;margin-bottom:30px;}
+footer.global-footer .footer-navigation-container nav.governance .color-scheme-toggle{margin-top:3em;}
+footer.global-footer .sub-navigation{flex-direction:column;align-items:center;}
+footer.global-footer .sub-navigation .legals{text-align:center;margin-bottom:50px;}
+}
+body[data-color-scheme=dark] .logo svg #logotype{fill:#fff;}
+}
+</style>
+
+<footer id="footer" class="global-footer">
+  <div class="container">
+    <div class="footer-navigation-container">
+      <nav aria-label="Main">
+    <a class="logo" href="/" title="Swift.org"> <svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" viewBox="0 0 191.186 59.391"><path fill="#F05138" d="M59.387 16.45a82.463 82.463 0 0 0-.027-1.792c-.035-1.301-.112-2.614-.343-3.9-.234-1.307-.618-2.523-1.222-3.71a12.464 12.464 0 0 0-5.453-5.452C51.156.992 49.941.609 48.635.374c-1.288-.232-2.6-.308-3.902-.343a85.714 85.714 0 0 0-1.792-.027C42.23 0 41.52 0 40.813 0H18.578c-.71 0-1.419 0-2.128.004-.597.004-1.195.01-1.792.027-.325.009-.651.02-.978.036-.978.047-1.959.133-2.924.307-.98.176-1.908.436-2.811.81A12.503 12.503 0 0 0 3.89 3.89a12.46 12.46 0 0 0-2.294 3.158C.992 8.235.61 9.45.374 10.758c-.231 1.286-.308 2.599-.343 3.9a85.767 85.767 0 0 0-.027 1.792C-.001 17.16 0 17.869 0 18.578v22.235c0 .71 0 1.418.004 2.128.004.597.01 1.194.027 1.791.035 1.302.112 2.615.343 3.901.235 1.307.618 2.523 1.222 3.71a12.457 12.457 0 0 0 5.453 5.453c1.186.603 2.401.986 3.707 1.22 1.287.232 2.6.31 3.902.344.597.016 1.195.023 1.793.027.709.005 1.417.004 2.127.004h22.235c.709 0 1.418 0 2.128-.004.597-.004 1.194-.011 1.792-.027 1.302-.035 2.614-.112 3.902-.343 1.306-.235 2.521-.618 3.707-1.222a12.461 12.461 0 0 0 5.453-5.452c.604-1.187.987-2.403 1.222-3.71.231-1.286.308-2.6.343-3.9.016-.598.023-1.194.027-1.792.004-.71.004-1.419.004-2.129V18.578c0-.71 0-1.419-.004-2.128z"></path><path fill="#FFF" d="m47.06 36.66-.004-.004c.066-.224.134-.446.191-.675 2.465-9.821-3.55-21.432-13.731-27.546 4.461 6.048 6.434 13.374 4.681 19.78-.156.571-.344 1.12-.552 1.653-.225-.148-.51-.316-.89-.527 0 0-10.127-6.252-21.103-17.312-.288-.29 5.852 8.777 12.822 16.14-3.284-1.843-12.434-8.5-18.227-13.802.712 1.187 1.558 2.33 2.489 3.43C17.573 23.932 23.882 31.5 31.44 37.314c-5.31 3.25-12.814 3.502-20.285.003a30.646 30.646 0 0 1-5.193-3.098c3.162 5.058 8.033 9.423 13.96 11.97 7.07 3.039 14.1 2.833 19.336.05l-.004.007c.024-.016.055-.032.08-.047.214-.116.428-.234.636-.358 2.516-1.306 7.485-2.63 10.152 2.559.654 1.27 2.041-5.46-3.061-11.74z"></path><path id="logotype" d="M81.93 38.542c.465 4.12 4.394 6.822 9.852 6.822 5.185 0 8.924-2.701 8.924-6.44 0-3.22-2.265-5.185-7.478-6.495l-5.048-1.282c-7.26-1.801-10.534-5.077-10.534-10.48 0-6.658 5.813-11.27 14.082-11.27 8.022 0 13.726 4.639 13.917 11.325h-5.32c-.41-4.093-3.74-6.604-8.734-6.604-4.94 0-8.378 2.538-8.378 6.249 0 2.892 2.13 4.612 7.369 5.95l4.202 1.09c8.133 1.993 11.462 5.159 11.462 10.863 0 7.259-5.759 11.816-14.928 11.816-8.514 0-14.327-4.53-14.763-11.543h5.376zM140.049 49.43h-5.35l-6.249-21.776h-.109L122.12 49.43h-5.348l-7.914-28.518h5.184l5.513 22.896h.11l6.221-22.896h5.021l6.277 22.896h.11l5.512-22.896h5.13L140.05 49.43zM151.39 13.244c0-1.718 1.419-3.11 3.138-3.11 1.746 0 3.165 1.392 3.165 3.11 0 1.72-1.419 3.139-3.165 3.139a3.157 3.157 0 0 1-3.139-3.139zm.545 7.669h5.213V49.43h-5.213V20.913zM191.186 25.116v-4.204h-5.513v-6.821h-5.185v6.821h-9.964v-2.51c.027-2.538 1.01-3.603 3.357-3.603.764 0 1.528.083 2.156.192v-4.094a18.193 18.193 0 0 0-2.756-.218c-5.568 0-7.915 2.32-7.915 7.642v2.591h-3.983v4.204h3.983V49.43h5.185V25.116H180.488v16.838c0 5.512 2.101 7.64 7.559 7.64 1.174 0 2.51-.082 3.111-.218v-4.257c-.355.055-1.392.137-1.965.137-2.428 0-3.52-1.147-3.52-3.712V25.116h5.513z"></path></svg> </a>
+
+    <ul>
+        
+        <li class="item ">
+            <a href="https://swift.org/documentation/" data-text="Docs">Docs</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/community/" data-text="Community">Community</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/packages/" data-text="Packages">Packages</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/blog/" data-text="Blog">Blog</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/install/" data-text="Install">Install</a>
+        </li>
+        
+    </ul>
+</nav>
+
+      <nav aria-label="Tools">
+    <h3>Tools</h3>
+    <ul>
+        
+        <li class="item ">
+            <a href="https://developer.apple.com/xcode/" data-text="Xcode">Xcode</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/documentation/articles/getting-started-with-vscode-swift.html" data-text="Visual Studio Code">Visual Studio Code</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/documentation/articles/zero-to-swift-emacs.html" data-text="Emacs">Emacs</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/documentation/articles/zero-to-swift-nvim.html" data-text="Neovim">Neovim</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://github.com/swiftlang/sourcekit-lsp/tree/main/Documentation/Editor%20Integration.md" data-text="Other Editors">Other Editors</a>
+        </li>
+        
+    </ul>
+</nav>
+
+      <nav aria-label="Community">
+    <h3>Community</h3>
+    <ul>
+        
+        <li class="item ">
+            <a href="https://swift.org/community/" data-text="Overview">Overview</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/swift-evolution/" data-text="Swift Evolution">Swift Evolution</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/diversity/" data-text="Diversity">Diversity</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/mentorship/" data-text="Mentorship">Mentorship</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/contributing/" data-text="Contributing">Contributing</a>
+        </li>
+        
+    </ul>
+</nav>
+
+      <nav class="governance" aria-label="Governance">
+    <h3>Governance</h3>
+    <ul>
+        
+        <li class="item ">
+            <a href="https://swift.org/code-of-conduct/" data-text="Code of Conduct">Code of Conduct</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/legal/license.html" data-text="License">License</a>
+        </li>
+        
+        <li class="item ">
+            <a href="https://swift.org/support/security.html" data-text="Security">Security</a>
+        </li>
+        
+    </ul>
+
+      <form class="color-scheme-toggle" role="radiogroup" tabindex="0" id="color-scheme-toggle">
+  <legend class="visuallyhidden">Color scheme preference</legend>
+  <label class="scheme-light" for="scheme-light">
+    <input id="scheme-light" type="radio" name="color-scheme-preference" value="light">
+    <span class="color-scheme-toggle-label">Light</span>
+  </label>
+  <label class="scheme-dark" for="scheme-dark">
+    <input id="scheme-dark" type="radio" name="color-scheme-preference" value="dark">
+    <span class="color-scheme-toggle-label">Dark</span>
+  </label>
+  <label class="scheme-auto-wrapper" for="scheme-auto" id="scheme-auto-wrapper">
+    <input id="scheme-auto" type="radio" name="color-scheme-preference" value="auto">
+    <span class="color-scheme-toggle-label">Auto</span>
+  </label>
+</form>
+</nav>
+    </div>
+
+    <div class="sub-navigation">
+      <div class="legals">
+        <div class="copyright">
+    
+    <p>
+      Copyright © 2025 Apple Inc. All rights reserved.
+    </p>
+    <p>
+      Swift and the Swift logo are trademarks of Apple Inc.
+    </p>
+</div>
+        <nav aria-label="Legals">
+    <ul>
+        
+            <li class="item ">
+                <a href="//www.apple.com/privacy/privacy-policy/">Privacy Policy</a>
+            </li>
+        
+            <li class="item ">
+                <a href="//www.apple.com/legal/privacy/en-ww/cookies/">Cookies</a>
+            </li>
+        
+            <li class="item ">
+                <a href="https://swift.org/openapi">API</a>
+            </li>
+        
+    </ul>
+</nav>
+      </div>
+
+      <nav class="socials" aria-label="Socials">
+    <ul>
+        
+            <li class="item ">
+                <a href="https://x.com/swiftlang" rel="me" title="Follow @SwiftLang on X"><i class="x"></i></a>
+            </li>
+        
+            <li class="item ">
+                <a href="https://bsky.app/profile/swift.org" rel="me" title="Follow @swift.org on Bluesky"><i class="bluesky"></i></a>
+            </li>
+        
+            <li class="item ">
+                <a href="https://mastodon.social/@swiftlang" rel="me" title="Follow @swiftLang on Mastodon"><i class="mastodon"></i></a>
+            </li>
+        
+            <li class="item ">
+                <a href="/atom.xml" rel="me" title="Subscribe to Site Updates"><i class="feed"></i></a>
+            </li>
+        
+    </ul>
+</nav>
+
+    </div>
+  </div>
+</footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', initColorScheme)
+
+const ColorScheme = {
+  auto: 'auto',
+  light: 'light',
+  dark: 'dark',
+}
+
+const localStorageKey = 'developer.setting.preferredColorScheme'
+
+const supportsAutoColorScheme = (() => {
+  return (
+    typeof window.matchMedia !== 'undefined' &&
+    ['light', 'dark', 'no-preference'].some(
+      (scheme) =>
+        window.matchMedia(`(prefers-color-scheme: ${scheme})`).matches,
+    )
+  )
+})()
+
+if (!supportsAutoColorScheme) {
+  document.getElementById('scheme-auto-wrapper')?.remove()
+}
+
+function initColorScheme() {
+  const toggle = getToggle()
+  if (toggle && toggle.value !== getStoredScheme()) {
+    toggle.value = getStoredScheme()
+  }
+
+  getToggleForm()?.addEventListener('change', (e) => {
+    setColorScheme(e.target.value)
+  })
+}
+
+function systemPrefersLight() {
+  return window.matchMedia('(prefers-color-scheme: light)')
+}
+
+function systemPrefersDark() {
+  return window.matchMedia('(prefers-color-scheme: dark)')
+}
+
+function isSystemDark() {
+  return systemPrefersDark().matches
+}
+
+function setColorScheme(value) {
+  if (!Object.values(ColorScheme).includes(value)) {
+    value = supportsAutoColorScheme ? ColorScheme.auto : ColorScheme.light
+  }
+
+  if (value === ColorScheme.auto) {
+    updateScheme(isSystemDark() ? ColorScheme.dark : ColorScheme.light, value)
+  } else {
+    updateScheme(value)
+  }
+}
+
+function updateScheme(scheme, storedValue = scheme) {
+  if (getStoredScheme() !== storedValue) {
+    saveScheme(storedValue)
+  }
+
+  if (getCurrentScheme() !== scheme) {
+    document.body.setAttribute('data-color-scheme', scheme)
+  }
+
+  const toggle = getToggle()
+  if (toggle && toggle.value !== storedValue) {
+    toggle.value = storedValue
+  }
+}
+
+systemPrefersLight().addEventListener('change', (e) => {
+  if (e.matches && getStoredScheme() === ColorScheme.auto) {
+    const current = getCurrentScheme()
+    if (current !== ColorScheme.light) {
+      document.body.setAttribute('data-color-scheme', ColorScheme.light)
+    }
+  }
+})
+
+systemPrefersDark().addEventListener('change', (e) => {
+  if (e.matches && getStoredScheme() === ColorScheme.auto) {
+    const current = getCurrentScheme()
+    if (current !== ColorScheme.dark) {
+      document.body.setAttribute('data-color-scheme', ColorScheme.dark)
+    }
+  }
+})
+
+window.addEventListener('storage', () => {
+  setColorScheme(getStoredScheme())
+})
+
+window.addEventListener('pageshow', () => {
+  setColorScheme(getStoredScheme())
+})
+
+function getToggleForm() {
+  return document.getElementById('color-scheme-toggle')
+}
+
+function getToggle() {
+  return getToggleForm()?.elements['color-scheme-preference']
+}
+
+function getCurrentScheme() {
+  return document.body.getAttribute('data-color-scheme')
+}
+
+function getStoredScheme() {
+  try {
+    return localStorage.getItem(localStorageKey)
+  } catch {
+    return null
+  }
+}
+
+function saveScheme(value) {
+  try {
+    localStorage.setItem(localStorageKey, value)
+  } catch {}
+}
+
+</script>
