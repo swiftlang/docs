@@ -1,6 +1,6 @@
 # Welcome to the Swift Project Documentation
 
-This repository hosts multiple [DocC][docc] catalogs that provide the source location for documentation content for the Swift project, hosted at [swift.org][swift.org].
+This repository hosts multiple [DocC][docc] catalogs that provide the source location for documentation content for the Swift project, hosted at [www.swift.org][www.swift.org].
 The repository provides a location to collect and collaborate on Documentation for the Swift open source project.
 For more information on the intent and inception, read the [Swift Docs Proposal][docs-proposal].
 
@@ -38,7 +38,7 @@ See [contributing][contributing] for more information on proposing new content, 
 This project is licensed under the terms of the [LICENSE][license]
 
 [codeowners]: .github/CODEOWNERS
-[swift.org]: https://www.swift.org/
+[www.swift.org]: https://www.swift.org/
 [docs-proposal]: https://github.com/swiftlang/swift-org-website/blob/main/_info-architecture/0003-swift-docs-proposal.md
 [issues]: https://github.com/swiftlang/docs/issues
 [conduct]: https://www.swift.org/code-of-conduct
