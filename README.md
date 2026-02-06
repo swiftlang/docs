@@ -33,15 +33,10 @@ The packages in this repository aren't meant to be depended upon or provide libr
 
 See [contributing][contributing] for more information on proposing new content, style and content guidelines, and the details of how contributors add content to the Swift Documentation.
 
-## License
-
-This project is licensed under the terms of the [LICENSE][license]
-
 [codeowners]: .github/CODEOWNERS
 [www.swift.org]: https://www.swift.org/
 [docs-proposal]: https://github.com/swiftlang/swift-org-website/blob/main/_info-architecture/0003-swift-docs-proposal.md
 [issues]: https://github.com/swiftlang/docs/issues
 [conduct]: https://www.swift.org/code-of-conduct
 [contributing]: /CONTRIBUTING.md
-[license]: /LICENSE.txt
 [docc]: https://www.swift.org/documentation/docc/
