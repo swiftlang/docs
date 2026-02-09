@@ -1,0 +1,8 @@
+# Common
+
+Files used across all of the DocC catalogs to render custom/themed output.
+
+- [Related documentation on theming DocC content](https://www.swift.org/documentation/docc/customizing-the-appearance-of-your-documentation-pages)
+- [OpenAPI spec of theme-settings.json schema](https://github.com/swiftlang/swift-docc/blob/main/Sources/SwiftDocC/SwiftDocC.docc/Resources/ThemeSettings.spec.json)
+
+The common files need to be copied, or perahps linked, into each of the DocC catalogs to keep a consistent flavor across them.
