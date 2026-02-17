@@ -1,0 +1,80 @@
+name: "Enhancement / Improvement"
+description: "Suggest improvements to existing documentation (without claiming inaccuracy)"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve the Swift documentation!
+
+        Use this template for:
+        - Adding examples or code snippets
+        - Improving clarity or wording
+        - Restructuring for better flow
+        - Adding cross-references or links
+
+        If content is factually incorrect, use the "Content Error" template instead.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: "Documentation Package"
+      description: "Which package would this improve?"
+      options:
+        - API Guidelines
+        - Language Guides
+        - Server Guides
+        - Ecosystem Tools
+        - Multiple packages
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: "Location (URL)"
+      description: "URL of the content to improve"
+      placeholder: "https://www.swift.org/documentation/..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: improvement_type
+    attributes:
+      label: "Type of Improvement"
+      description: "What kind of enhancement are you suggesting?"
+      options:
+        - Add examples or code samples
+        - Improve clarity or wording
+        - Add diagrams or illustrations
+        - Restructure or reorganize
+        - Add cross-references or links
+        - Expand coverage of topic
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_state
+    attributes:
+      label: "Current State"
+      description: "What does the documentation currently say or show?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_improvement
+    attributes:
+      label: "Proposed Improvement"
+      description: "How should it be improved?"
+      placeholder: "Be specific about what you'd like to see added or changed"
+    validations:
+      required: true
+
+  - type: textarea
+    id: benefit
+    attributes:
+      label: "Benefit"
+      description: "How will this improvement help readers?"
+    validations:
+      required: false
