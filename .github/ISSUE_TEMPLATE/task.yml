@@ -1,0 +1,75 @@
+name: "⚙️ Track a Task"
+description: "Track internal work, technical debt, or maintenance tasks"
+labels: ["task", "triage needed"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tasks track internal work items including:
+        - Technical debt or maintenance
+        - Build system or tooling updates
+        - Documentation infrastructure improvements
+        - Multi-step work that needs coordination
+
+        For content changes, consider using Content Error, Enhancement, or Content Proposal templates.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: "Affected Package(s)"
+      description: "Which packages does this task affect?"
+      multiple: true
+      options:
+        - API Guidelines
+        - Language Guides
+        - Server Guides
+        - Ecosystem Tools
+        - Repository infrastructure
+        - All packages
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task_type
+    attributes:
+      label: "Task Type"
+      description: "What kind of task is this?"
+      options:
+        - Technical debt
+        - Build system update
+        - Tooling improvement
+        - Infrastructure maintenance
+        - Process improvement
+        - Coordination / umbrella issue
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description"
+      description: "A clear description of the task"
+      placeholder: "Describe what needs to be done and why"
+    validations:
+      required: true
+
+  - type: textarea
+    id: subtasks
+    attributes:
+      label: "Subtasks or Checklist"
+      description: "Break down the work into steps (optional)"
+      placeholder: |
+        - [ ] Step 1
+        - [ ] Step 2
+        - [ ] Step 3
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_info
+    attributes:
+      label: "Additional Information"
+      description: "Any context, dependencies, or related issues"
+    validations:
+      required: false
