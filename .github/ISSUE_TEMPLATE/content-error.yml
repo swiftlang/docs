@@ -1,0 +1,61 @@
+name: "Content Error"
+description: "Report inaccurate or incorrect information in existing documentation"
+labels: ["content error", "triage needed"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve the Swift documentation!
+
+        Use this template to report inaccurate, misleading, or incorrect content.
+        If you're suggesting improvements without claiming inaccuracy, use the Enhancement template instead.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: "Documentation Package"
+      description: "Which package contains the error?"
+      options:
+        - API Guidelines
+        - Language Guides
+        - Server Guides
+        - Ecosystem Tools
+        - Not sure / Multiple packages
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: "Location (URL)"
+      description: "The URL of the page with the error (from swift.org or local preview)"
+      placeholder: "https://www.swift.org/documentation/..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description"
+      description: "What's wrong with the current content?"
+      placeholder: "Be specific about what information is incorrect or inaccurate"
+    validations:
+      required: true
+
+  - type: textarea
+    id: correction
+    attributes:
+      label: "Suggested Correction"
+      description: "What should the documentation say instead?"
+      placeholder: "Provide the corrected information or approach"
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Additional Context"
+      description: "Any supporting information, references, or examples"
+      placeholder: "Links to Swift Evolution proposals, API documentation, or code examples"
+    validations:
+      required: false

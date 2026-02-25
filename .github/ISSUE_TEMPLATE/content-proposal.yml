@@ -1,0 +1,76 @@
+name: "Content Proposal"
+description: "Propose new documentation topics or articles"
+labels: ["content proposal", "needs forum discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for proposing new Swift documentation!
+
+        For significant new content, please consider starting a discussion on the
+        [Swift Forums](https://forums.swift.org/c/development/swift-docc/80) first.
+
+        See our [Contributing Guide](https://github.com/swiftlang/docs/blob/main/CONTRIBUTING.md)
+        for guidance on proposing larger content additions.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: "Target Package"
+      description: "Which package should contain this new content?"
+      options:
+        - API Guidelines
+        - Language Guides
+        - Server Guides
+        - Ecosystem Tools
+        - New package needed
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: "Suggested Location"
+      description: "Where should this content be added? (chapter, section, or new article)"
+      placeholder: "e.g., 'Language Guides > Concurrency' or 'New article in Server Guides'"
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Content Description"
+      description: "What should this new documentation cover?"
+      placeholder: "Provide a clear summary of the proposed content"
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Motivation"
+      description: "Why is this documentation needed?"
+      placeholder: "What problem does this solve? What audience would benefit?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Scope and Outline"
+      description: "What topics should be covered? (optional outline)"
+      placeholder: |
+        - Topic 1
+        - Topic 2
+        - Examples needed
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives Considered"
+      description: "Have you considered other approaches or locations for this content?"
+    validations:
+      required: false
