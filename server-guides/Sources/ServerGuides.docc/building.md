@@ -159,7 +159,7 @@ However, Docker containers can be slower than native builds, especially on Apple
 
 For a detailed example of creating a container declaration to build and package your application, see [Packaging Swift Server Applications](./packaging.md).
 
-#### Choose static or dynamic linking
+#### Choose static or dynamic linking for the standard library
 
 By default, Swift build artifacts link the standard library dynamically.
 This keeps individual build artifacts smaller, and multiple programs can share a single copy of the Swift runtime.
@@ -179,7 +179,6 @@ These executables bundle the Swift runtime directly:
 | Build artifact size | Smaller (runtime not included) | Larger (runtime included in binary) |
 | Deployment complexity | Requires Swift runtime on target system | Self-contained, no runtime needed |
 | Version management | Must match runtime version on system | Each artifact includes its own runtime version |
-| Best for | Containerized deployments with Swift runtime | VMs or bare metal with unknown configurations |
 
 For deploying to VMs or bare metal where you don't control the system configuration, static linking removes the dependency on a pre-installed Swift runtime.
 
