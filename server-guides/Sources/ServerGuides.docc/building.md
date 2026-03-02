@@ -22,7 +22,7 @@ swift build
 Debug builds include full debugging symbols and runtime safety checks, which are essential during active development.
 The compiler skips most optimizations to keep compilation times fast, letting you quickly test changes.
 However, skipping optimizations can come at a significant cost to runtime performance.
-Debug builds typically run slower than their release counterparts.
+Debug builds typically run more slowly than their release counterparts.
 
 ### Create release builds for production
 
@@ -39,23 +39,6 @@ Release builds still include some debugging information for crash analysis, but 
 ## Optimize your builds
 
 Beyond choosing debug or release mode, several compiler flags can fine-tune your builds for specific scenarios.
-
-### Preserve frame pointers
-
-The compiler can omit frame pointers to gain additional performance.
-Frame pointers are saved register values that record the call stack, enabling accurate stack traces.
-Without them, debugging production crashes becomes more difficult because stack traces are less reliable.
-For production server applications, preserving frame pointers is usually worth the minimal performance cost.
-The compiler preserves frame pointers by default in release configurations. To guarantee this behavior regardless of future toolchain changes, you can pass the flag explicitly:
-
-```bash
-swift build -c release -Xcc -fno-omit-frame-pointer
-```
-
-The `-Xcc` flag passes options to the C compiler.
-`-fno-omit-frame-pointer` [tells the compiler](https://clang.llvm.org/docs/ClangCommandLineReference.html#cmdoption-clang-fomit-frame-pointer) to preserve frame pointers,
-ensuring that debugging tools can produce accurate backtraces when you diagnose a crash or profile performance.
-The performance impact is typically negligible for server workloads, while the debugging benefits are substantial.
 
 ### Enable cross-module optimization
 
@@ -124,7 +107,7 @@ Swift build artifacts are both platform- and architecture-specific.
 Artifacts you create on macOS run only on macOS; those you create on Linux run only on Linux.
 This creates a challenge when you work on macOS and deploy to Linux servers.
 
-You can use Xcode for development, but you need to produce Linux artifacts for deployment.
+You can use Xcode for development, but it can't produce Linux artifacts for deployment.
 Swift provides two main approaches for cross-platform building.
 
 #### Build with Linux containers
@@ -147,7 +130,7 @@ docker run --rm -it \
 ```
 
 These commands mount your current directory into the container and run `swift build` inside a Linux environment.
-The `swift:latest` container image provides this environment and produces Linux-compatible build artifacts.
+The `swift:latest` container image provides this environment and `swift build` produces Linux-compatible build artifacts.
 
 If you're on Apple silicon and need to target x86_64 Linux servers, specify the platform explicitly:
 
@@ -198,7 +181,6 @@ These executables bundle the Swift runtime directly:
 | Version management | Must match runtime version on system | Each artifact includes its own runtime version |
 | Best for | Containerized deployments with Swift runtime | VMs or bare metal with unknown configurations |
 
-For containerized deployments, dynamic linking is usually preferable because the container already includes the Swift runtime.
 For deploying to VMs or bare metal where you don't control the system configuration, static linking removes the dependency on a pre-installed Swift runtime.
 
 #### Cross-compile with the Static Linux SDK
@@ -224,6 +206,12 @@ your code can't use `dlopen` or similar mechanisms to dynamically load libraries
 
 For most projects, this distinction doesn't matter.
 However, packages with complex C dependencies can behave differently when built natively on Linux versus cross-compiled.
+
+### Build with VS Code using a Dev Container
+
+Visual Studio Code supports the Dev Container feature that lets you open, build, and debug your project within a container running on your local machine.
+The Dev Container builds your code in the Linux environment that the container provides.
+For more information on using a Dev Container, read [Visual Studio Code Dev Containers](https://docs.swift.org/vscode/documentation/userdocs/remote-dev/).
 
 ### Inspect a binary
 
