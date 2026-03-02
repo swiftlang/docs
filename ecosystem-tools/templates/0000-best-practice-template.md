@@ -7,7 +7,7 @@
 - Once approved, ***never rename***, only deprecate or remove.
 -->
 
-{{ A single sentence abstract that describes what the best practice covers, expanding upon title. }}
+{{ Replace with a single sentence abstract that describes what the best practice covers and expands upon title. }}
 
 ## Overview
 
@@ -28,6 +28,13 @@ Extend the overview with an additional paragraph providing more background if ne
 Provide a clear, complete, ideally "real" example of the best practice. If describing an API pattern, show both the implementation side and "call site" usage to illustrate it.
 
 If there's supporting tasks for the best practice, include the specifics of how to enable them in further H3 sections. Write The H3 section headings as imperative verb phrases that describe what the example is showing and what you should do for the best practice.
+
+<!-- Use Snippets to verify code examples:
+- For anything other than trivial code examples, create and use a snippet Swift file to verify that code samples compile.
+  - To use a snippet, create a Swift file in the Snippets directory and reference the snippet in this template.
+  - Reference the snippet in the best practice using the @Snippet directive. For example, if you create a snippet file named `ESG-0005.swift` in the Snippets directory, use the directive reference:
+  `@Snippet(path: "EcosystemTools/Snippets/ESG-0005")`
+-->
 
 ## Alternatives Considered
 
