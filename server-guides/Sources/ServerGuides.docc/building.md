@@ -184,7 +184,9 @@ For deploying to VMs or bare metal where you don't control the system configurat
 
 #### Cross-compile with the Static Linux SDK
 
-If the performance overhead of Docker-based builds affects your workflow, Swift 5.9 and later provide Static Linux SDKs that enable cross-compilation directly from macOS to Linux without using a container:
+If the performance overhead of Docker-based builds affects your workflow, Swift 5.9 and later provide Static Linux SDKs.
+Find the link to install the static Linux SDK on the [install page at Swift.org](https://www.swift.org/install/), and detailed instructions in the article [Getting Started with the Static Linux SDK](https://www.swift.org/documentation/articles/static-linux-getting-started.html).
+The SDK enables cross-compilation directly from macOS to Linux without using a container:
 
 ```bash
 # Build for x86_64 Linux
@@ -205,6 +207,8 @@ your code can't use `dlopen` or similar mechanisms to dynamically load libraries
 
 For most projects, this distinction doesn't matter.
 However, packages with complex C dependencies can behave differently when built natively on Linux versus cross-compiled.
+
+
 
 ### Build with VS Code using a Dev Container
 
