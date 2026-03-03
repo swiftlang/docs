@@ -1,14 +1,15 @@
----
-redirect_from: "server/guides/packaging"
-layout: page
-title: Packaging Applications for Deployment
----
+# Packaging Swift services with containers
 
-Once an application is built for production, it still needs to be packaged before it can be deployed to servers. There are several strategies for packaging Swift applications for deployment.
+Build a container that includes your Swift service with its resources and dependencies.
+
+## Overview
+
+Web services often require configuration, dependencies, and resources in order to run correctly.
+Creating an OCI container image, using technologies such as [Docker](https://www.docker.com) or [Container](https://github.com/apple/container), provides a way to deploy to your service onto a virtual machine or into a production cluster such as Kubernetes.
+The container includes the executable for your service, any runtime dependencies it needs, resources the service requires, a manifest to define configuration through environment variables, expose ports to your service, and a default command to run when the container is invoked.
+It combines these together into a portable image format that you run on servers.
 
 ## Docker
-
-One of the most popular ways to package applications these days is using container technologies such as [Docker](https://www.docker.com).
 
 Using Docker's tooling, we can build and package the application as a Docker image, publish it to a Docker repository, and later launch it directly on a server or on a platform that supports Docker deployments such as [Kubernetes](https://kubernetes.io). Many public cloud providers including AWS, GCP, Azure, IBM and others encourage this kind of deployment.
 
