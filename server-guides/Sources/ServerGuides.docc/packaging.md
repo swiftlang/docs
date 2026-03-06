@@ -9,6 +9,28 @@ Creating an OCI container image, using technologies such as [Docker](https://www
 The container includes the executable for your service, any runtime dependencies it needs, resources the service requires, a manifest to define configuration through environment variables, expose ports to your service, and a default command to run when the container is invoked.
 It combines these together into a portable image format that you run on servers.
 
+container:
+- linux dependencies
+- local filesysten with resources
+- command to invokr by defauly when you "run" the container
+- port that is exposed to provide access to incoming connections for listening sockets
+- ENV vars preset, or added by gow you run it - config value pattern
+- filesystems that your environment might provide (configmap)
+
+
+container as layers of filesysten chnages, overlaid - creating read only layers that get loaded into a container runtime to executee your Swift swrvice in its own, isolated environment. 
+
+your organization may provide vetted basr images, reviewed for your organizations best practices, security considerations, and so on. build on these base images to provide images that you can deploy, both locally to test and to run in production. 
+
+simple build
+dual build to slim
+cache intermediate build steps to optimize build times
+run locally to vet or debug
+push to a registry to makr iy available fot other systems to pull it
+
+
+
+
 ## Docker
 
 Using Docker's tooling, we can build and package the application as a Docker image, publish it to a Docker repository, and later launch it directly on a server or on a platform that supports Docker deployments such as [Kubernetes](https://kubernetes.io). Many public cloud providers including AWS, GCP, Azure, IBM and others encourage this kind of deployment.
