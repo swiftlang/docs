@@ -4,8 +4,14 @@ Build a container that includes your Swift service with its resources and depend
 
 ## Overview
 
-Web services often require configuration, dependencies, and resources in order to run correctly.
-Creating an OCI container image, using technologies such as [Docker](https://www.docker.com) or [Container](https://github.com/apple/container), provides a way to deploy to your service onto a virtual machine or into a production cluster such as Kubernetes.
+<!-- writing for someone who may be new to containers, not know much about using them -->
+<!-- assume familiar to Swift development and server use case specific libraries -->
+
+When you run your service in the cloud, it requires configuration, dependencies, and potentially resources to run correctly.
+A common means of packaging your app and what it needs are containers.
+Create an OCI container image, using technologies such as [Docker](https://www.docker.com) or [Container](https://github.com/apple/container), to deploy to your service onto a virtual machine or to cloud hosting infrastructure, such as a Kubernetes cluster.
+
+<!-- describe what a container is, and does -->
 The container includes the executable for your service, any runtime dependencies it needs, resources the service requires, a manifest to define configuration through environment variables, expose ports to your service, and a default command to run when the container is invoked.
 It combines these together into a portable image format that you run on servers.
 
@@ -17,18 +23,17 @@ container:
 - ENV vars preset, or added by gow you run it - config value pattern
 - filesystems that your environment might provide (configmap)
 
-
 container as layers of filesysten chnages, overlaid - creating read only layers that get loaded into a container runtime to executee your Swift swrvice in its own, isolated environment. 
 
 your organization may provide vetted basr images, reviewed for your organizations best practices, security considerations, and so on. build on these base images to provide images that you can deploy, both locally to test and to run in production. 
 
-simple build
-dual build to slim
-cache intermediate build steps to optimize build times
-run locally to vet or debug
-push to a registry to makr iy available fot other systems to pull it
+<!-- wrap up overview by outlining the details below for creating your own images -->
 
-
+### simple build
+### dual build to slim
+### cache intermediate build steps to optimize build times
+### push to a registry to make it available for other systems
+### run locally to vet or debug
 
 
 ## Docker
