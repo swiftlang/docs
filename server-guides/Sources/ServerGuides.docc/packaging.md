@@ -7,27 +7,58 @@ Build a container that includes your Swift service with its resources and depend
 <!-- writing for someone who may be new to containers, not know much about using them -->
 <!-- assume familiar to Swift development and server use case specific libraries -->
 
-When you run your service in the cloud, it requires configuration, dependencies, and potentially resources to run correctly.
-A common means of packaging your app and what it needs are containers.
-Create an OCI container image, using technologies such as [Docker](https://www.docker.com) or [Container](https://github.com/apple/container), to deploy to your service onto a virtual machine or to cloud hosting infrastructure, such as a Kubernetes cluster.
+Running your service in the cloud requires configuration, dependencies, and resources.
+Containers provide a standard way to package your service along with everything it needs.
+You build a container image using tools such as [Docker](https://www.docker.com) or [Container](https://github.com/apple/container),
+then deploy that image to a virtual machine or cloud hosting infrastructure
+such as a Kubernetes cluster.
 
 <!-- describe what a container is, and does -->
-The container includes the executable for your service, any runtime dependencies it needs, resources the service requires, a manifest to define configuration through environment variables, expose ports to your service, and a default command to run when the container is invoked.
-It combines these together into a portable image format that you run on servers.
+A container image packages everything your service needs to run into a single, portable artifact.
+The image's filesystem contains:
 
-container:
-- linux dependencies
-- local filesysten with resources
-- command to invokr by defauly when you "run" the container
-- port that is exposed to provide access to incoming connections for listening sockets
-- ENV vars preset, or added by gow you run it - config value pattern
-- filesystems that your environment might provide (configmap)
+- The compiled executable for your service
+- Linux system libraries and runtime dependencies
+- Resources your service requires, such as configuration files or static assets
 
-container as layers of filesysten chnages, overlaid - creating read only layers that get loaded into a container runtime to executee your Swift swrvice in its own, isolated environment. 
+The image also declares runtime metadata that controls how a container starts:
 
-your organization may provide vetted basr images, reviewed for your organizations best practices, security considerations, and so on. build on these base images to provide images that you can deploy, both locally to test and to run in production. 
+- A default command to run
+- Ports to expose for incoming network connections
+- Default values for environment variables that configure your service
+
+A container image is built from layers of filesystem changes, stacked on top of each other.
+Each layer is read-only and shared across images that use it, which makes images efficient to store and transfer.
+When you run an image, the container runtime adds a writable layer on top and starts your service as a container:
+a running instance of the image in its own isolated environment.
+
+At runtime, your deployment environment can mount additional filesystems
+into a container, such as configuration maps or secrets, to provide values that vary between environments.
 
 <!-- wrap up overview by outlining the details below for creating your own images -->
+
+### Swift container images
+
+The Swift project publishes container images on [Docker Hub](https://hub.docker.com/_/swift) that you can use to build and run your services.
+These images come in two forms:
+
+- **Full SDK images** include the Swift compiler, standard library, and development tools.
+  For example, `swift:6.2-noble` provides Swift 6.2 on Ubuntu 24.04.
+
+- **Slim runtime images** include only the Swift runtime libraries on a minimal Linux distribution.
+  Use these as the final stage in a multi-step image build to keep your deployed image small.
+  For example, `swift:6.2-noble-slim` provides a minimal Ubuntu 24.04 image with the Swift runtime.
+
+You can also use a plain Linux distribution image, such as `ubuntu:noble` or `ubuntu:noble-slim`, as your base image when you statically link the Swift standard library.
+
+<!-- check to see if there's a better location to reference for what the Swift project provides, linking to that instead of this sentence. -->
+The Swift Docker images are available for Ubuntu, Debian, Amazon Linux, Fedora, and Red Hat UBI.
+
+> Tip: Pin your images to a specific Swift version, such as `swift:6.2-noble`, rather than using the `latest` tag.
+> Pinning the image makes your builds more reproducible and prevents unexpected changes when a new Swift release is published.
+
+Your organization may provide vetted base images that reflect its security policies and operational best practices.
+If it does, build on those base images.
 
 ### simple build
 ### dual build to slim
@@ -40,14 +71,12 @@ your organization may provide vetted basr images, reviewed for your organization
 
 Using Docker's tooling, we can build and package the application as a Docker image, publish it to a Docker repository, and later launch it directly on a server or on a platform that supports Docker deployments such as [Kubernetes](https://kubernetes.io). Many public cloud providers including AWS, GCP, Azure, IBM and others encourage this kind of deployment.
 
-Here is an example `Dockerfile` that builds and packages the application on top of CentOS:
+Here is an example `Dockerfile` that builds and packages the application using Ubuntu:
 
 ```Dockerfile
 #------- build -------
-FROM swift:centos8 as builder
+FROM swift:6.2-noble AS builder
 
-# set up the workspace
-RUN mkdir /workspace
 WORKDIR /workspace
 
 # copy the source to the docker image
@@ -56,7 +85,7 @@ COPY . /workspace
 RUN swift build -c release --static-swift-stdlib
 
 #------- package -------
-FROM centos
+FROM ubuntu:noble
 # copy executables
 COPY --from=builder /workspace/.build/release/<executable-name> /
 
@@ -91,15 +120,12 @@ See [Docker's documentation](https://docs.docker.com/engine/reference/commandlin
 
 [Distroless](https://github.com/GoogleContainerTools/distroless) is a project by Google that attempts to create minimal images containing only the application and its runtime dependencies. They do not contain package managers, shells or any other programs you would expect to find in a standard Linux distribution.
 
-Since distroless supports Docker and is based on Debian, packaging a Swift application on it is fairly similar to the Docker process above. Here is an example `Dockerfile` that builds and packages the application on top of a distroless's C++ base image:
+Since distroless supports Docker and is based on Debian, packaging a Swift application on it is fairly similar to the Docker process above. Here is an example `Dockerfile` that builds and packages the application on top of distroless's C++ base image:
 
 ```Dockerfile
 #------- build -------
-# Building using Ubuntu Bionic since its compatible with Debian runtime
-FROM swift:bionic as builder
+FROM swift:6.2-noble AS builder
 
-# set up the workspace
-RUN mkdir /workspace
 WORKDIR /workspace
 
 # copy the source to the docker image
@@ -110,7 +136,7 @@ RUN swift build -c release --static-swift-stdlib
 #------- package -------
 # Running on distroless C++ since it includes
 # all(*) the runtime dependencies Swift programs need
-FROM gcr.io/distroless/cc-debian10
+FROM gcr.io/distroless/cc-debian12
 # copy executables
 COPY --from=builder /workspace/.build/release/<executable-name> /
 
@@ -118,7 +144,7 @@ COPY --from=builder /workspace/.build/release/<executable-name> /
 CMD ["<executable-name>"]
 ```
 
-Note the above uses `gcr.io/distroless/cc-debian10` as the runtime image which should work for Swift programs that do not use `FoundationNetworking` or `FoundationXML`. In order to provide more complete support we (the community) could put in a PR into distroless to introduce a base image for Swift that includes `libcurl` and `libxml` which are required for `FoundationNetworking` and `FoundationXML` respectively.
+Note the above uses `gcr.io/distroless/cc-debian12` as the runtime image which should work for Swift programs that do not use `FoundationNetworking` or `FoundationXML`. In order to provide more complete support we (the community) could put in a PR into distroless to introduce a base image for Swift that includes `libcurl` and `libxml` which are required for `FoundationNetworking` and `FoundationXML` respectively.
 
 ## Archive (Tarball, ZIP file, etc.)
 
@@ -134,7 +160,7 @@ First, use the `docker run` command from the application's source location to bu
 $ docker run --rm \
   -v "$PWD:/workspace" \
   -w /workspace \
-  swift:bionic \
+  swift:6.2-noble \
   /bin/bash -cl "swift build -c release --static-swift-stdlib"
 ```
 
@@ -146,7 +172,7 @@ Next we can create a staging area with the application's executable:
 $ docker run --rm \
   -v "$PWD:/workspace" \
   -w /workspace \
-  swift:bionic  \
+  swift:6.2-noble  \
   /bin/bash -cl ' \
      rm -rf .build/install && mkdir -p .build/install && \
      cp -P .build/release/<executable-name> .build/install/'
@@ -164,7 +190,7 @@ We can test the integrity of the tarball by extracting it to a directory and run
 
 ```bash
 $ cd <extracted directory>
-$ docker run -v "$PWD:/app" -w /app bionic ./<executable-name>
+$ docker run -v "$PWD:/app" -w /app ubuntu:noble ./<executable-name>
 ```
 
 Deploying the application's tarball to the target server can be done using utilities like `scp`, or in a more sophisticated setup using configuration management system like `chef`, `puppet`, `ansible`, etc.
