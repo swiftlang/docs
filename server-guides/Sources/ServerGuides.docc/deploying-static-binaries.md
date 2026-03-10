@@ -10,24 +10,20 @@ not even the C library.
 This lets you run the binary on any Linux machine regardless of distribution,
 which opens deployment options that aren't possible with dynamically linked builds.
 
-You can copy the binary into a `scratch` or distroless container image
-that contains nothing but your executable,
-or skip containers entirely and copy the binary to a virtual machine.
-Either way, the result is the smallest possible deployment artifact
-with the smallest possible attack surface.
+You can copy the binary into a `scratch` or distroless container image that contains nothing but your executable.
+Or skip containers entirely and copy the binary to a virtual machine.
+Either way, the result is the smallest possible deployment artifact with the smallest possible attack surface.
 
-This article walks you through installing the SDK,
-building a static binary, and deploying it.
+This article walks you through installing the SDK, building a static binary, and deploying it.
 
 ### Install the Static Linux SDK
 
-The Static Linux SDK requires an open-source Swift toolchain from [swift.org](https://www.swift.org/install/).
+The Static Linux SDK requires an open source Swift toolchain.
 The toolchain bundled with Xcode doesn't support SDK-based cross-compilation.
+Use swiftly to install an open source Swift toolchain, then install the static SDK for Linux for that toolchain.
+Go to [swift.org](https://www.swift.org/install/) for the links and commands to install both.
 
 Install the SDK with `swift sdk install`, providing the URL for your Swift version.
-
-Check the [Swift Install page](https://www.swift.org/install/) for the current install command,
-listed under SDK bundles as the Swift SDK for Static Linux.
 The command follows this form:
 
 ```bash
@@ -161,9 +157,7 @@ container run -p 8080:8080 registry.example.com/my-app
 
 ### Deploy directly to a Linux machine
 
-Containers aren't required.
-A static binary runs on any Linux machine,
-so you can copy it directly to a virtual machine or bare-metal server:
+A static binary runs on any Linux machine, so you can copy it directly to a virtual machine or bare-metal server:
 
 ```bash
 scp .build/release/<executable-name> user@server:/usr/local/bin/
@@ -175,10 +169,5 @@ On the server, run the executable directly:
 ssh user@server /usr/local/bin/<executable-name>
 ```
 
-No Swift runtime, no system libraries, and no container runtime needed.
-Use your preferred configuration management tool —
-Ansible, Chef, Puppet, or a simple shell script —
+Use your preferred configuration management tool, such as Ansible, Chef, Puppet, or shell scripts,
 to automate deployment across multiple hosts.
-
-> Tip: Pair direct deployment with a systemd service unit
-> to manage your service's lifecycle, restart policy, and logging.
