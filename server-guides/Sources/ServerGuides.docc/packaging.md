@@ -35,8 +35,6 @@ a running instance of the image in its own isolated environment.
 At runtime, your deployment environment can mount additional filesystems
 into a container, such as configuration maps or secrets, to provide values that vary between environments.
 
-<!-- wrap up overview by outlining the details below for creating your own images -->
-
 ### Swift container images
 
 The Swift project publishes container images on [Docker Hub](https://hub.docker.com/_/swift) that you can use to build and run your services.
@@ -49,7 +47,7 @@ These images come in two forms:
   Use these as the final stage in a multi-step image build to keep your deployed image small.
   For example, `swift:6.2-noble-slim` provides a minimal Ubuntu 24.04 image with the Swift runtime.
 
-You can also use a plain Linux distribution image, such as `ubuntu:noble` or `ubuntu:noble-slim`, as your base image when you statically link the Swift standard library.
+You can also use a plain Linux distribution image, such as `ubuntu:noble`, as your base image when you statically link the Swift standard library.
 
 <!-- check to see if there's a better location to reference for what the Swift project provides, linking to that instead of this sentence. -->
 The Swift Docker images are available for Ubuntu, Debian, Amazon Linux, Fedora, and Red Hat UBI.
@@ -81,7 +79,8 @@ The `EXPOSE` directive declares which port your service listens on.
 It doesn't publish the port — you do that at runtime with `-p` — but it documents
 the intended network interface and is used by some orchestrators and tooling.
 
-Build the image, using the `-t` flag tags the image with a name and version:
+Build the image.
+The `-t` flag tags the image with a name and version:
 
 ```bash
 container build -t <my-app>:latest .
@@ -95,9 +94,9 @@ If you don't include `:` and a version string, the tools default to `:latest`.
 > Note: The examples in this guide use the `container` command from [Apple's container tool](https://github.com/apple/container).
 > The `docker` command accepts the same arguments and works the same way.
 
-This approach works, and is handy for a quick local build for testing locally.
-However, the image includes the full Swift compiler and development tools that
-adds hundreds of megabytes your service never uses at runtime
+This approach works for a quick local build,
+but the image includes the full Swift compiler and development tools,
+which add hundreds of megabytes your service never uses at runtime
 and increases the attack surface of the deployed container.
 
 ### Slim the image with a multi-stage build
@@ -117,15 +116,16 @@ COPY . /workspace
 RUN swift build -c release --static-swift-stdlib
 
 # Stage 2: Package
-FROM ubuntu:noble-slim
+FROM ubuntu:noble
 COPY --from=builder /workspace/.build/release/<executable-name> /
 
+EXPOSE 8080
 CMD ["/<executable-name>"]
 ```
 
 The `--static-swift-stdlib` flag links the Swift standard library into your executable,
 so the final image does not need the Swift runtime installed.
-If your service uses `FoundationNetworking` or `FoundationXML`, use the image `swift:6.2-noble-slim` for your runtime based image, instead of `ubuntu:noble-slim`. 
+If your service uses `FoundationNetworking` or `FoundationXML`, use the image `swift:6.2-noble-slim` for your runtime-based image, instead of `ubuntu:noble`.
 This image includes system libraries that those frameworks use (`libcurl` and `libxml2`).
 
 Build and run the image the same way:
@@ -177,9 +177,10 @@ RUN --mount=type=cache,target=/tmp/.build,sharing=locked \
     cp /tmp/.build/release/<executable-name> /usr/local/bin/
 
 # Stage 2: Package
-FROM ubuntu:noble-slim
+FROM ubuntu:noble
 COPY --from=builder /usr/local/bin/<executable-name> /
 
+EXPOSE 8080
 CMD ["/<executable-name>"]
 ```
 
@@ -247,7 +248,7 @@ Pushing requires authentication with the registry.
 See [Docker's registry authentication documentation](https://docs.docker.com/reference/cli/docker/login/)
 for how to log in from the command line.
 
-> Tip: If you're using `container` instead of `docker`, then use the command `container registry login` to authenticate a registry.
+> Tip: If you're using `container` instead of `docker`, then use the command `container registry login` to authenticate with a registry.
 
 You can also apply the full registry tag directly during the build:
 
@@ -300,149 +301,3 @@ container run --rm -it <my-app>:latest /bin/sh
 This drops you into a shell inside the container where you can inspect
 the filesystem, check that files are in the expected locations,
 and verify the runtime environment.
-
-
-## Docker
-
-Using Docker's tooling, we can build and package the application as a Docker image, publish it to a Docker repository, and later launch it directly on a server or on a platform that supports Docker deployments such as [Kubernetes](https://kubernetes.io). Many public cloud providers including AWS, GCP, Azure, IBM and others encourage this kind of deployment.
-
-Here is an example `Dockerfile` that builds and packages the application using Ubuntu:
-
-```Dockerfile
-#------- build -------
-FROM swift:6.2-noble AS builder
-
-WORKDIR /workspace
-
-# copy the source to the docker image
-COPY . /workspace
-
-RUN swift build -c release --static-swift-stdlib
-
-#------- package -------
-FROM ubuntu:noble
-# copy executables
-COPY --from=builder /workspace/.build/release/<executable-name> /
-
-# set the entry point (application name)
-CMD ["<executable-name>"]
-```
-
-To create a local Docker image from the `Dockerfile` use the `docker build` command from the application's source location, e.g.:
-
-```bash
-$ docker build . -t <my-app>:<my-app-version>
-```
-
-To test the local image use the `docker run` command, e.g.:
-
-```bash
-$ docker run <my-app>:<my-app-version>
-```
-
-Finally, use the `docker push` command to publish the application's Docker image to a Docker repository of your choice, e.g.:
-
-```bash
-$ docker tag <my-app>:<my-app-version> <docker-hub-user>/<my-app>:<my-app-version>
-$ docker push <docker-hub-user>/<my-app>:<my-app-version>
-```
-
-At this point, the application's Docker image is ready to be deployed to the server hosts (which need to run docker), or to one of the platforms that supports Docker deployments.
-
-See [Docker's documentation](https://docs.docker.com/engine/reference/commandline/) for more complete information about Docker.
-
-### Distroless
-
-[Distroless](https://github.com/GoogleContainerTools/distroless) is a project by Google that attempts to create minimal images containing only the application and its runtime dependencies. They do not contain package managers, shells or any other programs you would expect to find in a standard Linux distribution.
-
-Since distroless supports Docker and is based on Debian, packaging a Swift application on it is fairly similar to the Docker process above. Here is an example `Dockerfile` that builds and packages the application on top of distroless's C++ base image:
-
-```Dockerfile
-#------- build -------
-FROM swift:6.2-noble AS builder
-
-WORKDIR /workspace
-
-# copy the source to the docker image
-COPY . /workspace
-
-RUN swift build -c release --static-swift-stdlib
-
-#------- package -------
-# Running on distroless C++ since it includes
-# all(*) the runtime dependencies Swift programs need
-FROM gcr.io/distroless/cc-debian12
-# copy executables
-COPY --from=builder /workspace/.build/release/<executable-name> /
-
-# set the entry point (application name)
-CMD ["<executable-name>"]
-```
-
-Note the above uses `gcr.io/distroless/cc-debian12` as the runtime image which should work for Swift programs that do not use `FoundationNetworking` or `FoundationXML`. In order to provide more complete support we (the community) could put in a PR into distroless to introduce a base image for Swift that includes `libcurl` and `libxml` which are required for `FoundationNetworking` and `FoundationXML` respectively.
-
-## Archive (Tarball, ZIP file, etc.)
-
-Since cross-compiling Swift for Linux is not (yet) supported on Mac or Windows, we need to use virtualization technologies like Docker to compile applications we are targeting to run on Linux.
-
-That said, this does not mean we must also package the applications as Docker images in order to deploy them. While using Docker images for deployment is convenient and popular, an application can also be packaged using a simple and lightweight archive format like tarball or ZIP file, then uploaded to the server where it can be extracted and run.
-
-Here is an example of using Docker and `tar` to build and package the application for deployment on Ubuntu servers:
-
-First, use the `docker run` command from the application's source location to build it:
-
-```bash
-$ docker run --rm \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  swift:6.2-noble \
-  /bin/bash -cl "swift build -c release --static-swift-stdlib"
-```
-
-Note we are bind mounting the source directory so that the build writes the build artifacts to the local drive from which we will package them later.
-
-Next we can create a staging area with the application's executable:
-
-```bash
-$ docker run --rm \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  swift:6.2-noble  \
-  /bin/bash -cl ' \
-     rm -rf .build/install && mkdir -p .build/install && \
-     cp -P .build/release/<executable-name> .build/install/'
-```
-
-Note this command could be combined with the build command above--we separated them to make the example more readable.
-
-Finally, create a tarball from the staging directory:
-
-```bash
-$ tar cvzf <my-app>-<my-app-version>.tar.gz -C .build/install .
-```
-
-We can test the integrity of the tarball by extracting it to a directory and running the application in a Docker runtime container:
-
-```bash
-$ cd <extracted directory>
-$ docker run -v "$PWD:/app" -w /app ubuntu:noble ./<executable-name>
-```
-
-Deploying the application's tarball to the target server can be done using utilities like `scp`, or in a more sophisticated setup using configuration management system like `chef`, `puppet`, `ansible`, etc.
-
-
-## Source Distribution
-
-Another distribution technique popular with dynamic languages like Ruby or Javascript is distributing the source to the server, then compiling it on the server itself.
-
-To build Swift applications directly on the server, the server must have the correct Swift toolchain installed. [Swift.org](/download/#linux) publishes toolchains for a variety of Linux distributions, make sure to use the one matching your server Linux version and desired Swift version.
-
-The main advantage of this approach is that it is easy. Additional advantage is the server has the full toolchain (e.g. debugger) that can help troubleshoot issues "live" on the server.
-
-The main disadvantage of this approach that the server has the full toolchain (e.g. compiler) which means a sophisticated attacker can potentially find ways to execute code. They can also potentially gain access to the source code which might be sensitive. If the application code needs to be cloned from a private or protected repository, the server needs access to credentials which adds additional attack surface area.
-
-In most cases, source distribution is not advised due to these security concerns.
-
-## Static linking and Curl/XML
-
-**Note:** if you are compiling with `-static-stdlib` and using Curl with FoundationNetworking or XML with FoundationXML you must have libcurl and/or libxml2 installed on the target system for it to work.
