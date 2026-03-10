@@ -60,10 +60,162 @@ The Swift Docker images are available for Ubuntu, Debian, Amazon Linux, Fedora, 
 Your organization may provide vetted base images that reflect its security policies and operational best practices.
 If it does, build on those base images.
 
-### simple build
-### dual build to slim
-### cache intermediate build steps to optimize build times
-### push to a registry to make it available for other systems
+### Build a container image
+
+A single-stage build compiles and packages your service in one image.
+Create a file named `Dockerfile` at the root of your project:
+
+```Dockerfile
+FROM swift:6.2-noble
+
+WORKDIR /workspace
+COPY . /workspace
+
+RUN swift build -c release --static-swift-stdlib
+
+CMD [".build/release/<executable-name>"]
+```
+
+Build the image, using the `-t` flag tags the image with a name and version:
+
+```bash
+container build -t <my-app>:latest .
+```
+
+Tags identify images locally and determine where images go when you push them to a registry.
+The convention is `<name>:<version>` — for example, `my-app:1.0` or `my-app:latest`.
+Choose a name that matches your service and a version that reflects the build.
+If you don't include `:` and a version string, the tools default to `:latest`.
+
+> Note: The examples in this guide use the `container` command from [Apple's container tool](https://github.com/apple/container).
+> The `docker` command accepts the same arguments and works the same way.
+
+This approach works, and is handy for a quick local build for testing locally.
+However, the image includes the full Swift compiler and development tools that
+adds hundreds of megabytes your service never uses at runtime
+and increases the attack surface of the deployed container.
+
+### Slim the image with a multi-stage build
+
+A [multi-stage build](https://docs.docker.com/build/building/multi-stage/) separates compilation from packaging.
+The first stage compiles your service using the full SDK image.
+The second stage copies only the compiled executable into a minimal runtime image,
+producing a final image that is a fraction of the size.
+
+```Dockerfile
+# Stage 1: Build
+FROM swift:6.2-noble AS builder
+
+WORKDIR /workspace
+COPY . /workspace
+
+RUN swift build -c release --static-swift-stdlib
+
+# Stage 2: Package
+FROM ubuntu:noble-slim
+COPY --from=builder /workspace/.build/release/<executable-name> /
+
+CMD ["/<executable-name>"]
+```
+
+The `--static-swift-stdlib` flag links the Swift standard library into your executable,
+so the final image does not need the Swift runtime installed.
+If your service uses `FoundationNetworking` or `FoundationXML`, use the image `swift:6.2-noble-slim` for your runtime based image, instead of `ubuntu:noble-slim`. 
+This image includes system libraries that those frameworks use (`libcurl` and `libxml2`).
+
+Build and run the image the same way:
+
+```bash
+container build -t <my-app>:latest .
+```
+
+### Cache build artifacts to speed up rebuilds
+
+The Dockerfiles above copy all source files into the image, and build from scratch every time.
+For a small project this is fine, but as your service grows,
+rebuilding all dependencies on every change slows down the development cycle.
+
+[Docker BuildKit cache mounts](https://docs.docker.com/build/cache/)
+persist directories across builds so that Swift Package Manager's resolved packages
+and compiled artifacts survive between invocations.
+Combined with bind mounts that pass in only the files each step needs,
+this avoids copying files into the image layer and keeps the cache effective
+even when source files change.
+
+The following Dockerfile resolves dependencies and builds in separate steps,
+each with a cache mount for the build directory:
+
+```Dockerfile
+# Stage 1: Build
+FROM swift:6.2-noble AS builder
+
+WORKDIR /workspace
+
+# Resolve dependencies — re-runs only when Package.swift or Package.resolved change
+RUN --mount=type=cache,target=/tmp/.build,sharing=locked \
+    --mount=type=bind,source=Package.swift,target=Package.swift \
+    --mount=type=bind,source=Package.resolved,target=Package.resolved \
+    swift package resolve --force-resolved-versions --build-path /tmp/.build
+
+# Build the executable — reuses cached dependencies and prior compilation results
+RUN --mount=type=cache,target=/tmp/.build,sharing=locked \
+    --mount=type=bind,source=Package.swift,target=Package.swift \
+    --mount=type=bind,source=Package.resolved,target=Package.resolved \
+    --mount=type=bind,source=./Sources,target=./Sources \
+    swift build -c release --static-swift-stdlib \
+      --product <executable-name> --build-path /tmp/.build && \
+    cp /tmp/.build/release/<executable-name> /usr/local/bin/
+
+# Stage 2: Package
+FROM ubuntu:noble-slim
+COPY --from=builder /usr/local/bin/<executable-name> /
+
+CMD ["/<executable-name>"]
+```
+
+Cache mounts (`--mount=type=cache`) keep the `/tmp/.build` directory across builds
+so Swift Package Manager reuses previously resolved packages and compiled modules.
+Bind mounts (`--mount=type=bind`) pass specific files into each `RUN` step
+without adding them to the image layer,
+which means changes to your source files don't invalidate the cache.
+
+Because cache mounts aren't part of the final image layer,
+the build step explicitly copies the compiled binary to a known path
+before the second stage picks it up.
+
+> Note: If your project includes a `Snippets/` directory or other non-source directories
+> referenced by `Package.swift`, add additional bind mounts for those directories
+> in the build step.
+
+### Push to a registry
+
+A container registry stores and distributes images so that other systems can pull and run them.
+To push an image, tag it with the registry's hostname and repository path,
+then push the tagged image.
+
+Using [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) as an example:
+
+```bash
+container tag <my-app>:latest ghcr.io/<github-username>/<my-app>:latest
+container push ghcr.io/<github-username>/<my-app>:latest
+```
+
+Pushing requires authentication with the registry.
+See [Docker's registry authentication documentation](https://docs.docker.com/reference/cli/docker/login/)
+for how to log in from the command line.
+
+> Tip: If you're using `container` instead of `docker`, then use the command `container registry login` to authenticate a registry.
+
+You can also apply the full registry tag directly during the build:
+
+```bash
+container build -t ghcr.io/<github-username>/<my-app>:1.0 .
+container push ghcr.io/<github-username>/<my-app>:1.0
+```
+
+> Note: Your organization or cloud hosting provider may operate its own container registry.
+> Check with your team for the correct registry hostname and authentication method.
+
 ### run locally to vet or debug
 
 
