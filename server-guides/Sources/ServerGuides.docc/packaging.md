@@ -138,11 +138,11 @@ For a small project, this is fine, but as your service grows,
 rebuilding all dependencies on every change slows down the development cycle.
 
 [Docker BuildKit cache mounts](https://docs.docker.com/build/cache/)
-persist directories across builds so that Swift Package Manager's resolved packages
-and compiled artifacts survive between invocations.
-Combined with bind mounts that pass in only the files each step needs,
-this avoids copying files into the image layer and keeps the cache effective
-even when source files change.
+persist directories across builds.
+Swift Package Manager's resolved packages and compiled artifacts survive between invocations.
+Bind mounts pass in only the files each step needs
+without copying them into the image layer,
+which keeps the cache effective even when source files change.
 
 The following Dockerfile resolves dependencies and builds in separate steps,
 each with a cache mount for the build directory:
@@ -176,11 +176,11 @@ EXPOSE 8080
 CMD ["/<executable-name>"]
 ```
 
-Cache mounts (`--mount=type=cache`) keep the `/tmp/.build` directory across builds
-so Swift Package Manager reuses previously resolved packages and compiled modules.
+Cache mounts (`--mount=type=cache`) keep the `/tmp/.build` directory across builds.
+Swift Package Manager reuses previously resolved packages and compiled modules.
 Bind mounts (`--mount=type=bind`) pass specific files into each `RUN` step
-without adding them to the image layer,
-which means changes to your source files don't invalidate the cache.
+without adding them to the image layer.
+Changes to your source files don't invalidate the cache.
 
 Because cache mounts aren't part of the final image layer,
 the build step explicitly copies the compiled binary to a known path
@@ -281,15 +281,13 @@ container run -v "$PWD/config:/config" <my-app>:latest
 ```
 
 For interactive debugging, combine `--rm` and `-it`.
-The `--rm` flag removes the container when it exits so stopped containers don't accumulate.
-The `-it` flags attach an interactive terminal,
-which lets you interrupt the process with Control-C
-or explore the container's filesystem if you override the default command:
+The `--rm` flag removes the container when it exits, so stopped containers don't accumulate.
+The `-it` flags attach an interactive terminal.
+You can interrupt the process with Control-C, or override the default command to explore the container's filesystem:
 
 ```bash
 container run --rm -it <my-app>:latest /bin/sh
 ```
 
-This drops you into a shell inside the container where you can inspect
-the filesystem, check that files are in the expected locations,
-and verify the runtime environment.
+This drops you into a shell inside the container.
+You can inspect the filesystem, check that files are in the expected locations, and verify the runtime environment.
