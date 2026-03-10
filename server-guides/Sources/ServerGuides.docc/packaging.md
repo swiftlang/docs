@@ -73,8 +73,13 @@ COPY . /workspace
 
 RUN swift build -c release --static-swift-stdlib
 
+EXPOSE 8080
 CMD [".build/release/<executable-name>"]
 ```
+
+The `EXPOSE` directive declares which port your service listens on.
+It doesn't publish the port — you do that at runtime with `-p` — but it documents
+the intended network interface and is used by some orchestrators and tooling.
 
 Build the image, using the `-t` flag tags the image with a name and version:
 
@@ -128,6 +133,11 @@ Build and run the image the same way:
 ```bash
 container build -t <my-app>:latest .
 ```
+
+> Tip: Create a `.dockerignore` file at the root of your project to exclude directories
+> like `.build/` and `.git/` from the build context.
+> Without it, `COPY . /workspace` sends everything to the build daemon,
+> which slows builds and can bloat image layers.
 
 ### Cache build artifacts to speed up rebuilds
 
@@ -187,6 +197,39 @@ before the second stage picks it up.
 > referenced by `Package.swift`, add additional bind mounts for those directories
 > in the build step.
 
+### Build for a different platform
+
+If your development machine and deployment target use different CPU architectures —
+for example, building on Apple Silicon (arm64) and deploying to x86_64 cloud infrastructure —
+you need to specify the target platform when building the image.
+
+With `docker`, use the `--platform` flag:
+
+```bash
+docker build --platform linux/amd64 -t <my-app>:latest .
+```
+
+To build for multiple architectures in a single command,
+use `docker buildx` which produces a multi-architecture image manifest:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t <my-app>:latest .
+```
+
+See [Docker's multi-platform build documentation](https://docs.docker.com/build/building/multi-platform/)
+for setup details, including creating a builder that supports cross-platform emulation.
+
+Apple's `container` tool builds for the host architecture by default.
+To target a different architecture, use the `--arch` flag:
+
+```bash
+container build --arch amd64 -t <my-app>:latest .
+```
+
+> Note: Cross-platform builds use emulation, which is significantly slower than native builds.
+> When possible, build on infrastructure that matches your deployment architecture,
+> such as an x86_64 CI runner for x86_64 deployments.
+
 ### Push to a registry
 
 A container registry stores and distributes images so that other systems can pull and run them.
@@ -216,7 +259,47 @@ container push ghcr.io/<github-username>/<my-app>:1.0
 > Note: Your organization or cloud hosting provider may operate its own container registry.
 > Check with your team for the correct registry hostname and authentication method.
 
-### run locally to vet or debug
+### Run locally to verify and debug
+
+Run a container from your image to verify it starts correctly:
+
+```bash
+container run <my-app>:latest
+```
+
+To expose a port from the container to your host machine, use the `-p` flag.
+The first number is the host port, the second is the container port:
+
+```bash
+container run -p 8080:8080 <my-app>:latest
+```
+
+Pass environment variables with `-e` to configure your service without rebuilding:
+
+```bash
+container run -p 8080:8080 -e LOG_LEVEL=debug <my-app>:latest
+```
+
+Mount a local directory into the container with `-v` to provide configuration files
+or inspect output your service writes to disk:
+
+```bash
+container run -v "$PWD/config:/config" <my-app>:latest
+```
+
+For interactive debugging, combine `--rm` and `-it`.
+The `--rm` flag removes the container when it exits so stopped containers don't accumulate.
+The `-it` flags attach an interactive terminal,
+which lets you interrupt the process with Control-C
+or explore the container's filesystem if you override the default command:
+
+```bash
+container run --rm -it <my-app>:latest /bin/sh
+```
+
+This drops you into a shell inside the container where you can inspect
+the filesystem, check that files are in the expected locations,
+and verify the runtime environment.
 
 
 ## Docker
