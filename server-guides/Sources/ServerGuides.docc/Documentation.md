@@ -7,4 +7,5 @@
 ## Topics
 
 - <doc:building>
-
+- <doc:packaging>
+- <doc:deploying-static-binaries>
