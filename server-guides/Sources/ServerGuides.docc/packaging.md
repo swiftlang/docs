@@ -117,8 +117,8 @@ CMD ["/<executable-name>"]
 
 The `--static-swift-stdlib` flag links the Swift standard library into your executable,
 so the final image doesn't need the Swift runtime installed.
-If your service uses `FoundationNetworking` or `FoundationXML`, use the image `swift:6.2-noble-slim` for your runtime-based image, instead of `ubuntu:noble`.
-This image includes system libraries that those frameworks use (`libcurl` and `libxml2`).
+If your service uses `FoundationNetworking` or `FoundationXML`, use `swift:6.2-noble-slim` instead of `ubuntu:noble` for the runtime image.
+This image includes system libraries that those frameworks require: `libcurl` and `libxml2`.
 
 Build and run the image the same way:
 

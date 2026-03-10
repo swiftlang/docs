@@ -20,7 +20,7 @@ This article walks you through installing the SDK, building a static binary, and
 
 The Static Linux SDK requires an open source Swift toolchain.
 The toolchain bundled with Xcode doesn't support SDK-based cross-compilation.
-Use swiftly to install an open source Swift toolchain, then install the static SDK for Linux for that toolchain.
+Use `swiftly` to install an open source Swift toolchain, then install the Static Linux SDK for that toolchain.
 Go to [swift.org](https://www.swift.org/install/) for the links and commands to install both.
 
 Install the SDK with `swift sdk install`, providing the URL for your Swift version.
@@ -62,8 +62,8 @@ including the Swift standard library, Foundation, and system libraries
 like libcurl and libxml2.
 
 > Note: Because Musl replaces Glibc,
-> some packages that import C libraries need changes.
-> For some packages, the fix is changing import lines from `Glibc` to `Musl`.
+> some packages that import C libraries need changes —
+> for example, changing import lines from `Glibc` to `Musl`.
 > The Swift standard library and Foundation handle this automatically.
 
 ### Deploy to a distroless container image
