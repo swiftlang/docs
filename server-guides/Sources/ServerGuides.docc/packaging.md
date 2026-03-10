@@ -4,16 +4,12 @@ Build a container that includes your Swift service with its resources and depend
 
 ## Overview
 
-<!-- writing for someone who may be new to containers, not know much about using them -->
-<!-- assume familiar to Swift development and server use case specific libraries -->
-
 Running your service in the cloud requires configuration, dependencies, and resources.
 Containers provide a standard way to package your service along with everything it needs.
 You build a container image using tools such as [Docker](https://www.docker.com) or [Container](https://github.com/apple/container),
 then deploy that image to a virtual machine or cloud hosting infrastructure
 such as a Kubernetes cluster.
 
-<!-- describe what a container is, and does -->
 A container image packages everything your service needs to run into a single, portable artifact.
 The image's filesystem contains:
 
@@ -44,13 +40,10 @@ These images come in two forms:
   For example, `swift:6.2-noble` provides Swift 6.2 on Ubuntu 24.04.
 
 - **Slim runtime images** include only the Swift runtime libraries on a minimal Linux distribution.
-  Use these as the final stage in a multi-step image build to keep your deployed image small.
+  Use these as the final stage in a multi-stage build to keep your deployed image small.
   For example, `swift:6.2-noble-slim` provides a minimal Ubuntu 24.04 image with the Swift runtime.
 
 You can also use a plain Linux distribution image, such as `ubuntu:noble`, as your base image when you statically link the Swift standard library.
-
-<!-- check to see if there's a better location to reference for what the Swift project provides, linking to that instead of this sentence. -->
-The Swift Docker images are available for Ubuntu, Debian, Amazon Linux, Fedora, and Red Hat UBI.
 
 > Tip: Pin your images to a specific Swift version, such as `swift:6.2-noble`, rather than using the `latest` tag.
 > Pinning the image makes your builds more reproducible and prevents unexpected changes when a new Swift release is published.
@@ -76,8 +69,7 @@ CMD [".build/release/<executable-name>"]
 ```
 
 The `EXPOSE` directive declares which port your service listens on.
-It doesn't publish the port — you do that at runtime with `-p` — but it documents
-the intended network interface and is used by some orchestrators and tooling.
+It doesn't publish the port — you do that at runtime with `-p` — but it documents the intended network interface, and some orchestrators and tools use it.
 
 Build the image.
 The `-t` flag tags the image with a name and version:
@@ -96,8 +88,8 @@ If you don't include `:` and a version string, the tools default to `:latest`.
 
 This approach works for a quick local build,
 but the image includes the full Swift compiler and development tools,
-which add hundreds of megabytes your service never uses at runtime
-and increases the attack surface of the deployed container.
+which add hundreds of megabytes that your service never uses at runtime
+and expand the attack surface of the deployed container.
 
 ### Slim the image with a multi-stage build
 
@@ -124,7 +116,7 @@ CMD ["/<executable-name>"]
 ```
 
 The `--static-swift-stdlib` flag links the Swift standard library into your executable,
-so the final image does not need the Swift runtime installed.
+so the final image doesn't need the Swift runtime installed.
 If your service uses `FoundationNetworking` or `FoundationXML`, use the image `swift:6.2-noble-slim` for your runtime-based image, instead of `ubuntu:noble`.
 This image includes system libraries that those frameworks use (`libcurl` and `libxml2`).
 
@@ -141,8 +133,8 @@ container build -t <my-app>:latest .
 
 ### Cache build artifacts to speed up rebuilds
 
-The Dockerfiles above copy all source files into the image, and build from scratch every time.
-For a small project this is fine, but as your service grows,
+The Dockerfiles above copy all source files into the image and build from scratch every time.
+For a small project, this is fine, but as your service grows,
 rebuilding all dependencies on every change slows down the development cycle.
 
 [Docker BuildKit cache mounts](https://docs.docker.com/build/cache/)
@@ -211,7 +203,7 @@ docker build --platform linux/amd64 -t <my-app>:latest .
 ```
 
 To build for multiple architectures in a single command,
-use `docker buildx` which produces a multi-architecture image manifest:
+use `docker buildx`, which produces a multi-architecture image manifest:
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 -t <my-app>:latest .
@@ -248,7 +240,7 @@ Pushing requires authentication with the registry.
 See [Docker's registry authentication documentation](https://docs.docker.com/reference/cli/docker/login/)
 for how to log in from the command line.
 
-> Tip: If you're using `container` instead of `docker`, then use the command `container registry login` to authenticate with a registry.
+> Tip: If you're using `container` instead of `docker`, authenticate with `container registry login`.
 
 You can also apply the full registry tag directly during the build:
 
