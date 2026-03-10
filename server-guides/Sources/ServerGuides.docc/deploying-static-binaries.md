@@ -16,10 +16,8 @@ or skip containers entirely and copy the binary to a virtual machine.
 Either way, the result is the smallest possible deployment artifact
 with the smallest possible attack surface.
 
-This article walks you through this process:
-- install the SDK
-- build a static binary
-- deploy it
+This article walks you through installing the SDK,
+building a static binary, and deploying it.
 
 ### Install the Static Linux SDK
 
@@ -28,8 +26,8 @@ The toolchain bundled with Xcode doesn't support SDK-based cross-compilation.
 
 Install the SDK with `swift sdk install`, providing the URL for your Swift version.
 
-Check the [Swift Install page](https://www.swift.org/install/) for the Swift SDK for Static Linux under SDK bundles
-for the current install command.
+Check the [Swift Install page](https://www.swift.org/install/) for the current install command,
+listed under SDK bundles as the Swift SDK for Static Linux.
 The command follows this form:
 
 ```bash
@@ -62,14 +60,14 @@ swift build -c release --swift-sdk x86_64-swift-linux-musl
 
 This produces a statically linked ELF binary in `.build/release/`
 that you can copy to any Linux system and run directly.
-The SDK uses [Musl](https://musl.libc.org) instead of Glibc,
+The SDK uses [Musl](https://musl.libc.org) instead of Glibc
 and statically links everything the executable needs —
 including the Swift standard library, Foundation, and system libraries
 like libcurl and libxml2.
 
 > Note: Because Musl replaces Glibc,
 > some packages that import C libraries need changes.
-> For some, the fix is changing import lines from `Glibc` to `Musl`.
+> For some packages, the fix is changing import lines from `Glibc` to `Musl`.
 > The Swift standard library and Foundation handle this automatically.
 
 ### Deploy to a distroless container image
@@ -129,7 +127,7 @@ container build -t <my-app>:latest .
 ### Build and publish with Swift Container Plugin
 
 The [Swift Container Plugin](https://github.com/apple/swift-container-plugin)
-combines the build, packaging, and registry push into a single command.
+combines building, packaging, and pushing to a registry into a single command.
 It builds your service with the Static Linux SDK,
 packages the executable into a container image,
 and publishes the image to a container registry — all without a Dockerfile.
@@ -149,7 +147,7 @@ swift package --swift-sdk aarch64-swift-linux-musl \
     build-container-image --repository registry.example.com/my-app
 ```
 
-The plugin produces a minimal image equivalent to a `scratch`-based Dockerfile
+The plugin produces a minimal image equivalent to one from a `scratch`-based Dockerfile
 and pushes it to the specified registry.
 Run the published image with any container runtime:
 
