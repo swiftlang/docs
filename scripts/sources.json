@@ -79,7 +79,7 @@
     "id": "embedded-swift",
     "type": "git",
     "repo": "https://github.com/swiftlang/swift-embedded-examples.git",
-    "targets": ["EmbeddedSwift"],
+    "docc_catalog": "Sources/EmbeddedSwift/Documentation.docc",
     "combined": true
   },
   {

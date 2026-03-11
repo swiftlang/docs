@@ -21,7 +21,7 @@ TEMPLATE_FILES=(header.html footer.html)
 
 # Defaults
 OUTPUT_DIR="$ROOT_DIR/.build-output"
-WORKSPACE="$ROOT_DIR/.build-workspace"
+WORKSPACE="$ROOT_DIR/.workspace"
 CLEAN=false
 ONLY=""
 
@@ -33,7 +33,7 @@ Build and export DocC documentation archives from multiple sources.
 
 Options:
   --output-dir <path>   Where to export built archives (default: .build-output/)
-  --workspace <path>    Where to clone external repos (default: .build-workspace/)
+  --workspace <path>    Where to clone external repos (default: .workspace/)
   --clean               Remove workspace and re-clone everything
   --only <id>           Build only a specific source by id
   -h, --help            Show this help message
