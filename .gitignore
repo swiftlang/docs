@@ -6,3 +6,5 @@ Package.resolved
 .build-workspace/
 .workspace/
 .build-output/
+**/*.docc/header.html
+**/*.docc/footer.html
