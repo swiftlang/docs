@@ -3,13 +3,13 @@
 import PackageDescription
 
 let package = Package(
-  name: "EcosystemTools",
+  name: "Editors and Tools",
   dependencies: [
     .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0")
   ],
   targets: [
     .target(
-      name: "EcosystemTools",
+      name: "Editors and Tools",
       path: "Sources"
     )
   ]
