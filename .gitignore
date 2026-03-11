@@ -3,3 +3,5 @@
 .build
 .swiftpm
 Package.resolved
+.build-workspace/
+.build-output/
