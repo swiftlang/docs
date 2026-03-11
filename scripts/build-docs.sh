@@ -244,6 +244,16 @@ build_source() {
     local is_combined
     is_combined=$(echo "$entry" | jq -r '.combined // false')
 
+    # Read per-source extra flags as a bash array (may be empty)
+    local extra_flags=()
+    local extra_flags_json
+    extra_flags_json=$(echo "$entry" | jq -r '.extra_flags // empty')
+    if [[ -n "$extra_flags_json" ]]; then
+        while IFS= read -r f; do
+            extra_flags+=("$f")
+        done < <(echo "$entry" | jq -r '.extra_flags[]')
+    fi
+
     # Read targets as a bash array (may be empty)
     local targets=()
     local targets_json
@@ -301,7 +311,8 @@ build_source() {
             echo "Building target: $target"
             (cd "$source_dir" && swift package generate-documentation \
                 --target "$target" \
-                "${DOCC_BUILD_FLAGS[@]}")
+                "${DOCC_BUILD_FLAGS[@]}" \
+                ${extra_flags[@]+"${extra_flags[@]}"})
 
             local archive
             archive=$(find_doccarchive "$source_dir" "$target")
@@ -344,7 +355,8 @@ build_source() {
         rm -rf "$output_path"
 
         $DOCC_CMD convert "$catalog_path" --output-path "$output_path" \
-            "${DOCC_BUILD_FLAGS[@]}"
+            "${DOCC_BUILD_FLAGS[@]}" \
+            ${extra_flags[@]+"${extra_flags[@]}"}
 
         if [[ "$is_combined" == "true" ]]; then
             COMBINED_ARCHIVES+=("$output_path")

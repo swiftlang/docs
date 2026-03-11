@@ -72,7 +72,8 @@
     "type": "git",
     "repo": "https://github.com/swiftlang/swift.git",
     "docc_catalog": "userdocs/diagnostics",
-    "combined": true
+    "combined": true,
+    "extra_flags": ["--allow-arbitrary-catalog-directories"]
   },
   {
     "id": "embedded-swift",
