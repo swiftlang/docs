@@ -5,6 +5,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCES_FILE="$SCRIPT_DIR/sources.json"
 
+# Ensure consistent, pretty-printed DocC JSON output
+export DOCC_JSON_PRETTYPRINT=YES
+
+# Common DocC build flags applied to all documentation builds
+DOCC_BUILD_FLAGS=(
+    --experimental-enable-custom-templates
+    --enable-mentioned-in
+    --enable-experimental-external-link-support
+)
+
+# Common template files to copy into each .docc catalog before building
+COMMON_DIR="$ROOT_DIR/common"
+TEMPLATE_FILES=(header.html footer.html)
+
 # Defaults
 OUTPUT_DIR="$ROOT_DIR/.build-output"
 WORKSPACE="$ROOT_DIR/.build-workspace"
@@ -74,6 +88,14 @@ if ! jq empty "$SOURCES_FILE" 2>/dev/null; then
     echo "Error: sources.json is not valid JSON"
     exit 1
 fi
+
+# Validate common template files exist
+for tmpl in "${TEMPLATE_FILES[@]}"; do
+    if [[ ! -f "$COMMON_DIR/$tmpl" ]]; then
+        echo "Error: common template '$tmpl' not found at $COMMON_DIR/$tmpl"
+        exit 1
+    fi
+done
 
 # Validate all source entries before doing any work
 validate_sources() {
@@ -151,6 +173,21 @@ mkdir -p "$OUTPUT_DIR" "$WORKSPACE"
 # Track results
 declare -a SUCCEEDED=()
 declare -a FAILED=()
+declare -a COMBINED_ARCHIVES=()
+declare -a COMBINED_EXPECTED_IDS=()
+
+# Find the docc tool — prefer xcrun on macOS, fall back to PATH.
+# Resolved once and reused throughout.
+resolve_docc_cmd() {
+    if command -v xcrun &>/dev/null && xcrun --find docc &>/dev/null 2>&1; then
+        echo "xcrun docc"
+    elif command -v docc &>/dev/null; then
+        echo "docc"
+    else
+        echo ""
+    fi
+}
+DOCC_CMD=$(resolve_docc_cmd)
 
 # Find .doccarchive files produced by swift package generate-documentation.
 # They land in the .build directory tree; the exact path varies by toolchain.
@@ -159,6 +196,40 @@ find_doccarchive() {
     local target="$2"
     # Look for <Target>.doccarchive anywhere under .build
     find "$search_dir/.build" -type d -name "${target}.doccarchive" 2>/dev/null | head -n 1
+}
+
+# Discover the .docc catalog directory for a Swift package target using
+# `swift package describe`. Returns the path relative to the package root.
+find_docc_catalog_for_target() {
+    local source_dir="$1"
+    local target="$2"
+
+    local target_path
+    target_path=$(cd "$source_dir" && swift package describe --type json 2>/dev/null \
+        | jq -r --arg t "$target" '.targets[] | select(.name == $t) | .path')
+
+    if [[ -z "$target_path" ]]; then
+        echo ""
+        return
+    fi
+
+    # Look for a .docc directory inside the target's source path
+    find "$source_dir/$target_path" -maxdepth 1 -name "*.docc" -type d 2>/dev/null | head -n 1
+}
+
+# Copy common template files (header.html, footer.html) into a .docc catalog.
+# Warns if the catalog already contains a file that will be overwritten.
+install_templates() {
+    local catalog_dir="$1"
+    local source_id="$2"
+
+    for tmpl in "${TEMPLATE_FILES[@]}"; do
+        if [[ -f "$catalog_dir/$tmpl" ]]; then
+            echo "  WARNING: overwriting existing $tmpl in $source_id catalog"
+        fi
+        cp "$COMMON_DIR/$tmpl" "$catalog_dir/$tmpl"
+        echo "  Installed $tmpl -> $catalog_dir/"
+    done
 }
 
 build_source() {
@@ -170,6 +241,8 @@ build_source() {
     path=$(echo "$entry" | jq -r '.path // empty')
     repo=$(echo "$entry" | jq -r '.repo // empty')
     docc_catalog=$(echo "$entry" | jq -r '.docc_catalog // empty')
+    local is_combined
+    is_combined=$(echo "$entry" | jq -r '.combined // false')
 
     # Read targets as a bash array (may be empty)
     local targets=()
@@ -212,10 +285,23 @@ build_source() {
     #   targets     -> swift package generate-documentation --target <T>
     #   docc_catalog -> docc convert
     if [[ ${#targets[@]} -gt 0 ]]; then
+        # Install templates into each target's .docc catalog
+        for target in "${targets[@]}"; do
+            local catalog_dir
+            catalog_dir=$(find_docc_catalog_for_target "$source_dir" "$target")
+            if [[ -n "$catalog_dir" ]]; then
+                install_templates "$catalog_dir" "$id/$target"
+            else
+                echo "  Note: could not locate .docc catalog for target '$target', skipping template install"
+            fi
+        done
+
         # Build each target via swift package
         for target in "${targets[@]}"; do
             echo "Building target: $target"
-            (cd "$source_dir" && swift package generate-documentation --target "$target")
+            (cd "$source_dir" && swift package generate-documentation \
+                --target "$target" \
+                "${DOCC_BUILD_FLAGS[@]}")
 
             local archive
             archive=$(find_doccarchive "$source_dir" "$target")
@@ -231,6 +317,10 @@ build_source() {
             echo "Exporting $archive -> $OUTPUT_DIR/${output_name}.doccarchive"
             rm -rf "${OUTPUT_DIR:?}/${output_name}.doccarchive"
             cp -R "$archive" "$OUTPUT_DIR/${output_name}.doccarchive"
+
+            if [[ "$is_combined" == "true" ]]; then
+                COMBINED_ARCHIVES+=("$OUTPUT_DIR/${output_name}.doccarchive")
+            fi
         done
 
     else
@@ -241,22 +331,24 @@ build_source() {
             return 1
         fi
 
-        local output_path="$OUTPUT_DIR/${id}.doccarchive"
-        echo "Converting catalog with docc convert..."
-        rm -rf "$output_path"
-
-        # Find the docc tool — prefer xcrun on macOS, fall back to PATH
-        local docc_cmd
-        if command -v xcrun &>/dev/null && xcrun --find docc &>/dev/null 2>&1; then
-            docc_cmd="xcrun docc"
-        elif command -v docc &>/dev/null; then
-            docc_cmd="docc"
-        else
+        if [[ -z "$DOCC_CMD" ]]; then
             echo "Error: 'docc' tool not found (tried xcrun and PATH)"
             return 1
         fi
 
-        $docc_cmd convert "$catalog_path" --output-path "$output_path"
+        # Install templates into the catalog
+        install_templates "$catalog_path" "$id"
+
+        local output_path="$OUTPUT_DIR/${id}.doccarchive"
+        echo "Converting catalog with docc convert..."
+        rm -rf "$output_path"
+
+        $DOCC_CMD convert "$catalog_path" --output-path "$output_path" \
+            "${DOCC_BUILD_FLAGS[@]}"
+
+        if [[ "$is_combined" == "true" ]]; then
+            COMBINED_ARCHIVES+=("$output_path")
+        fi
     fi
 
     echo "Done: $id"
@@ -272,12 +364,87 @@ for i in $(seq 0 $((source_count - 1))); do
         continue
     fi
 
+    is_combined=$(echo "$entry" | jq -r '.combined // false')
+
+    if [[ "$is_combined" == "true" ]]; then
+        COMBINED_EXPECTED_IDS+=("$entry_id")
+    fi
+
     if build_source "$entry"; then
         SUCCEEDED+=("$entry_id")
     else
         FAILED+=("$entry_id")
     fi
 done
+
+# Merge combined archives — only if all combined sources built successfully
+if [[ ${#COMBINED_EXPECTED_IDS[@]} -gt 0 && -z "$ONLY" ]]; then
+    echo ""
+    echo "========================================"
+    echo "Merging combined documentation archive"
+    echo "========================================"
+
+    # Check that no combined source appears in the FAILED list
+    combined_failures=()
+    for cid in "${COMBINED_EXPECTED_IDS[@]}"; do
+        for fid in ${FAILED[@]+"${FAILED[@]}"}; do
+            if [[ "$cid" == "$fid" ]]; then
+                combined_failures+=("$cid")
+            fi
+        done
+    done
+
+    if [[ ${#combined_failures[@]} -gt 0 ]]; then
+        echo "Error: cannot merge — the following combined sources failed to build:"
+        for cf in "${combined_failures[@]}"; do
+            echo "  - $cf"
+        done
+        echo "Skipping merge step."
+        FAILED+=("combined-merge")
+
+    elif [[ ${#COMBINED_ARCHIVES[@]} -eq 0 ]]; then
+        echo "Error: no combined archives were produced despite all sources succeeding"
+        FAILED+=("combined-merge")
+
+    elif [[ -z "$DOCC_CMD" ]]; then
+        echo "Error: 'docc' tool not found, cannot merge archives"
+        FAILED+=("combined-merge")
+
+    else
+        # Verify every expected archive exists on disk
+        missing_archives=()
+        for a in "${COMBINED_ARCHIVES[@]}"; do
+            if [[ ! -d "$a" ]]; then
+                missing_archives+=("$a")
+            fi
+        done
+
+        if [[ ${#missing_archives[@]} -gt 0 ]]; then
+            echo "Error: the following expected archives are missing:"
+            for ma in "${missing_archives[@]}"; do
+                echo "  - $ma"
+            done
+            FAILED+=("combined-merge")
+        else
+            COMBINED_OUTPUT="$OUTPUT_DIR/Combined.doccarchive"
+            rm -rf "$COMBINED_OUTPUT"
+
+            echo "Merging ${#COMBINED_ARCHIVES[@]} archives..."
+            for a in "${COMBINED_ARCHIVES[@]}"; do
+                echo "  - $(basename "$a")"
+            done
+
+            if $DOCC_CMD merge "${COMBINED_ARCHIVES[@]}" \
+                --output-path "$COMBINED_OUTPUT"; then
+                echo "Combined archive: $COMBINED_OUTPUT"
+                SUCCEEDED+=("combined-merge")
+            else
+                echo "Error: docc merge failed"
+                FAILED+=("combined-merge")
+            fi
+        fi
+    fi
+fi
 
 # Summary
 echo ""
