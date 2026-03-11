@@ -1,0 +1,80 @@
+[
+  {
+    "id": "api-guidelines",
+    "type": "local",
+    "path": "api-guidelines",
+    "targets": ["APIGuidelines"]
+  },
+  {
+    "id": "language-guides",
+    "type": "local",
+    "path": "language-guides",
+    "targets": ["LanguageGuides"]
+  },
+  {
+    "id": "server-guides",
+    "type": "local",
+    "path": "server-guides",
+    "targets": ["ServerGuides"]
+  },
+  {
+    "id": "ecosystem-tools",
+    "type": "local",
+    "path": "ecosystem-tools",
+    "targets": ["EcosystemTools"]
+  },
+  {
+    "id": "swift-book",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-book.git",
+    "docc_catalog": "TSPL.docc"
+  },
+  {
+    "id": "swift-migration-guide",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-migration-guide.git",
+    "docc_catalog": "Guide.docc"
+  },
+  {
+    "id": "docc-documentation",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-docc.git",
+    "docc_catalog": "Sources/docc/DocCDocumentation.docc"
+  },
+  {
+    "id": "swiftpm",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-package-manager.git",
+    "targets": ["PackageManagerDocs", "PackageDescription", "PackagePlugin"]
+  },
+  {
+    "id": "swiftly",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swiftly.git",
+    "targets": ["SwiftlyDocs"]
+  },
+  {
+    "id": "vscode-swift",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/vscode-swift.git",
+    "docc_catalog": "userdocs/userdocs.docc"
+  },
+  {
+    "id": "compiler-diagnostics",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift.git",
+    "docc_catalog": "userdocs/diagnostics"
+  },
+  {
+    "id": "embedded-swift",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-embedded-examples.git",
+    "targets": ["EmbeddedSwift"]
+  },
+  {
+    "id": "swift-server-todos-tutorial",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-server-todos-tutorial.git",
+    "docc_catalog": "SwiftServerTodos.docc"
+  }
+]
