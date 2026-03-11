@@ -1,9 +1,9 @@
-# API Design Guidelines
+# ``APIGuidelines``
+
+## Overview
 
 Delivering a clear, consistent developer experience when writing Swift code is largely defined by the names and idioms that appear in APIs.
 These design guidelines explain how to make sure that your code feels like a part of the larger Swift ecosystem.
-
-## Fundamentals
 
 * **Clarity at the point of use** is your most important goal.
   Entities such as methods and properties are declared only once but
@@ -25,44 +25,6 @@ These design guidelines explain how to make sure that your code feels like a par
 > Warning:
 > If you are having trouble describing your API's
 > functionality in simple terms, **you may have designed the wrong API.**
-
-## Naming
-
-### Promote Clear Usage
-
-### Strive for Fluent Usage
-
-### Use Terminology Well
-
-**Term of Art**
-: *noun* - a word or phrase that has a precise, specialized meaning
-  within a particular field or profession.
-
-## Conventions
-
-### General Conventions
-
-<!-- {% comment %}
-* **Be conscious of grammatical ambiguity**. Many words can act as
-   either a noun or a verb, e.g. "insert," "record," "contract," and
-   "drink."  Consider how these dual roles may affect the clarity of
-   your API.
-{% endcomment %} -->
-
-### Parameters
-
-```swift
-func move(from **start**: Point, to **end**: Point)
-```
-
-### Argument Labels
-
-```swift
-func move(**from** start: Point, **to** end: Point)
-x.move(**from:** x, **to:** y)
-```
-
-## Special Instructions
 
 ## Topics
 
