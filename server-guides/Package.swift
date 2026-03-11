@@ -3,13 +3,13 @@
 import PackageDescription
 
 let package = Package(
-  name: "ServerGuides",
+  name: "Server Guides",
   dependencies: [
     .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0")
   ],
   targets: [
     .target(
-      name: "ServerGuides",
+      name: "Server Guides",
       path: "Sources"
     )
   ]
