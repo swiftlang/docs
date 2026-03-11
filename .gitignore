@@ -4,4 +4,5 @@
 .swiftpm
 Package.resolved
 .build-workspace/
+.workspace/
 .build-output/
