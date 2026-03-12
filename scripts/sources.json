@@ -88,5 +88,12 @@
     "repo": "https://github.com/swiftlang/swift-server-todos-tutorial.git",
     "docc_catalog": "SwiftServerTodos.docc",
     "combined": true
+  },
+  { 
+    "id": "swift-wasm",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-for-wasm-examples.git",
+    "targets": ["WasmGuide"],
+    "combined": true
   }
 ]
