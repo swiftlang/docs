@@ -106,12 +106,13 @@ validate_sources() {
     local validation_failed=false
 
     for i in $(seq 0 $((source_count - 1))); do
-        local entry entry_id entry_type entry_path entry_repo has_targets has_docc_catalog label
+        local entry entry_id entry_type entry_path entry_repo entry_branch has_targets has_docc_catalog label
         entry=$(jq ".[$i]" "$SOURCES_FILE")
         entry_id=$(echo "$entry" | jq -r '.id // empty')
         entry_type=$(echo "$entry" | jq -r '.type // empty')
         entry_path=$(echo "$entry" | jq -r '.path // empty')
         entry_repo=$(echo "$entry" | jq -r '.repo // empty')
+        entry_branch=$(echo "$entry" | jq -r '.branch // empty')
         has_targets=$(echo "$entry" | jq 'has("targets")')
         has_docc_catalog=$(echo "$entry" | jq 'has("docc_catalog")')
 
@@ -150,6 +151,18 @@ validate_sources() {
 
         if [[ "$has_targets" == "true" && "$has_docc_catalog" == "true" ]]; then
             echo "Validation error: $label has both 'targets' and 'docc_catalog' (they are mutually exclusive)"
+            validation_failed=true
+        fi
+
+        if [[ -n "$entry_branch" && "$entry_type" != "git" ]]; then
+            echo "Validation error: $label has 'branch' but is not type 'git'"
+            validation_failed=true
+        fi
+
+        local add_docc_plugin
+        add_docc_plugin=$(echo "$entry" | jq -r '.add_docc_plugin // false')
+        if [[ "$add_docc_plugin" == "true" && "$entry_type" != "git" ]]; then
+            echo "Validation error: $label has 'add_docc_plugin' but is not type 'git'"
             validation_failed=true
         fi
     done
@@ -237,7 +250,7 @@ install_templates() {
 }
 
 build_source() {
-    local id type path repo docc_catalog source_dir
+    local id type path repo docc_catalog source_dir branch
     local entry="$1"
 
     id=$(echo "$entry" | jq -r '.id')
@@ -245,8 +258,15 @@ build_source() {
     path=$(echo "$entry" | jq -r '.path // empty')
     repo=$(echo "$entry" | jq -r '.repo // empty')
     docc_catalog=$(echo "$entry" | jq -r '.docc_catalog // empty')
+    branch=$(echo "$entry" | jq -r '.branch // empty')
+    # Default to "main" when no branch is specified
+    if [[ -z "$branch" ]]; then
+        branch="main"
+    fi
     local is_combined
     is_combined=$(echo "$entry" | jq -r '.combined // false')
+    local add_docc_plugin
+    add_docc_plugin=$(echo "$entry" | jq -r '.add_docc_plugin // false')
 
     # Read per-source extra flags as a bash array (may be empty)
     local extra_flags=()
@@ -283,16 +303,24 @@ build_source() {
     elif [[ "$type" == "git" ]]; then
         source_dir="$WORKSPACE/$id"
         if [[ -d "$source_dir/.git" ]]; then
-            echo "Updating existing clone..."
-            git -C "$source_dir" fetch --quiet origin
-            git -C "$source_dir" reset --quiet --hard origin/main
+            echo "Updating existing clone (branch: $branch)..."
+            git -C "$source_dir" fetch --quiet origin "$branch"
+            git -C "$source_dir" checkout --quiet "$branch" 2>/dev/null || git -C "$source_dir" checkout --quiet -b "$branch" "origin/$branch"
+            git -C "$source_dir" reset --quiet --hard "origin/$branch"
         else
-            echo "Cloning $repo..."
-            git clone --quiet --depth 1 "$repo" "$source_dir"
+            echo "Cloning $repo (branch: $branch)..."
+            git clone --quiet --branch "$branch" "$repo" "$source_dir"
         fi
     else
         echo "Error: unknown type '$type'"
         return 1
+    fi
+
+    # Inject swift-docc-plugin dependency if requested
+    if [[ "$add_docc_plugin" == "true" ]]; then
+        echo "Adding swift-docc-plugin dependency..."
+        (cd "$source_dir" && swift package add-dependency \
+            https://github.com/swiftlang/swift-docc-plugin --from 1.1.0)
     fi
 
     # Build based on JSON configuration:
