@@ -7,6 +7,13 @@
     "combined": true
   },
   {
+    "id": "swift-migration-guide",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-migration-guide.git",
+    "docc_catalog": "Guide.docc",
+    "combined": true
+  },
+  {
     "id": "api-guidelines",
     "type": "local",
     "path": "api-guidelines",
@@ -20,12 +27,14 @@
     "targets": ["LanguageGuides"],
     "combined": true
   },
-  {
-    "id": "server-guides",
-    "type": "local",
-    "path": "server-guides",
-    "targets": ["ServerGuides"],
-    "combined": true
+    {
+    "id": "compiler-diagnostics",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift.git",
+    "branch": "release/6.3",
+    "docc_catalog": "userdocs/diagnostics",
+    "combined": true,
+    "extra_flags": ["--allow-arbitrary-catalog-directories"]
   },
   {
     "id": "ecosystem-tools",
@@ -35,16 +44,10 @@
     "combined": true
   },
   {
-    "id": "swift-migration-guide",
-    "type": "git",
-    "repo": "https://github.com/swiftlang/swift-migration-guide.git",
-    "docc_catalog": "Guide.docc",
-    "combined": true
-  },
-  {
     "id": "docc-documentation",
     "type": "git",
     "repo": "https://github.com/swiftlang/swift-docc.git",
+    "branch": "release/6.3",
     "docc_catalog": "Sources/docc/DocCDocumentation.docc",
     "combined": true
   },
@@ -52,34 +55,38 @@
     "id": "swiftpm",
     "type": "git",
     "repo": "https://github.com/swiftlang/swift-package-manager.git",
+    "branch": "release/6.3",
     "targets": ["PackageManagerDocs", "PackageDescription", "PackagePlugin"],
     "combined": true
   },
   {
-    "id": "swiftly",
+    "id": "swift-testing",
     "type": "git",
-    "repo": "https://github.com/swiftlang/swiftly.git",
-    "targets": ["SwiftlyDocs"]
-  },
-  {
-    "id": "vscode-swift",
-    "type": "git",
-    "repo": "https://github.com/swiftlang/vscode-swift.git",
-    "docc_catalog": "userdocs/userdocs.docc"
-  },
-  {
-    "id": "compiler-diagnostics",
-    "type": "git",
-    "repo": "https://github.com/swiftlang/swift.git",
-    "docc_catalog": "userdocs/diagnostics",
-    "combined": true,
-    "extra_flags": ["--allow-arbitrary-catalog-directories"]
+    "repo": "https://github.com/swiftlang/swift-testing.git",
+    "branch": "release/6.3",
+    "targets": ["Testing"],
+    "add_docc_plugin": true,
+    "combined": true
   },
   {
     "id": "embedded-swift",
     "type": "git",
     "repo": "https://github.com/swiftlang/swift-embedded-examples.git",
     "docc_catalog": "Sources/EmbeddedSwift/Documentation.docc",
+    "combined": true
+  },
+  { 
+    "id": "swift-wasm",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-for-wasm-examples.git",
+    "targets": ["WasmGuide"],
+    "combined": true
+  },
+  {
+    "id": "server-guides",
+    "type": "local",
+    "path": "server-guides",
+    "targets": ["ServerGuides"],
     "combined": true
   },
   {
@@ -89,11 +96,16 @@
     "docc_catalog": "SwiftServerTodos.docc",
     "combined": true
   },
-  { 
-    "id": "swift-wasm",
+  {
+    "id": "vscode-swift",
     "type": "git",
-    "repo": "https://github.com/swiftlang/swift-for-wasm-examples.git",
-    "targets": ["WasmGuide"],
-    "combined": true
+    "repo": "https://github.com/swiftlang/vscode-swift.git",
+    "docc_catalog": "userdocs/userdocs.docc"
+  },
+  {
+    "id": "swiftly",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swiftly.git",
+    "targets": ["SwiftlyDocs"]
   }
-]
+  ]
