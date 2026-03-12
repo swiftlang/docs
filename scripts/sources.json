@@ -1,0 +1,99 @@
+[
+  {
+    "id": "swift-book",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-book.git",
+    "docc_catalog": "TSPL.docc",
+    "combined": true
+  },
+  {
+    "id": "api-guidelines",
+    "type": "local",
+    "path": "api-guidelines",
+    "targets": ["APIGuidelines"],
+    "combined": true
+  },
+  {
+    "id": "language-guides",
+    "type": "local",
+    "path": "language-guides",
+    "targets": ["LanguageGuides"],
+    "combined": true
+  },
+  {
+    "id": "server-guides",
+    "type": "local",
+    "path": "server-guides",
+    "targets": ["ServerGuides"],
+    "combined": true
+  },
+  {
+    "id": "ecosystem-tools",
+    "type": "local",
+    "path": "ecosystem-tools",
+    "targets": ["EcosystemTools"],
+    "combined": true
+  },
+  {
+    "id": "swift-migration-guide",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-migration-guide.git",
+    "docc_catalog": "Guide.docc",
+    "combined": true
+  },
+  {
+    "id": "docc-documentation",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-docc.git",
+    "docc_catalog": "Sources/docc/DocCDocumentation.docc",
+    "combined": true
+  },
+  {
+    "id": "swiftpm",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-package-manager.git",
+    "targets": ["PackageManagerDocs", "PackageDescription", "PackagePlugin"],
+    "combined": true
+  },
+  {
+    "id": "swiftly",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swiftly.git",
+    "targets": ["SwiftlyDocs"]
+  },
+  {
+    "id": "vscode-swift",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/vscode-swift.git",
+    "docc_catalog": "userdocs/userdocs.docc"
+  },
+  {
+    "id": "compiler-diagnostics",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift.git",
+    "docc_catalog": "userdocs/diagnostics",
+    "combined": true,
+    "extra_flags": ["--allow-arbitrary-catalog-directories"]
+  },
+  {
+    "id": "embedded-swift",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-embedded-examples.git",
+    "docc_catalog": "Sources/EmbeddedSwift/Documentation.docc",
+    "combined": true
+  },
+  {
+    "id": "swift-server-todos-tutorial",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-server-todos-tutorial.git",
+    "docc_catalog": "SwiftServerTodos.docc",
+    "combined": true
+  },
+  { 
+    "id": "swift-wasm",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-for-wasm-examples.git",
+    "targets": ["WasmGuide"],
+    "combined": true
+  }
+]
