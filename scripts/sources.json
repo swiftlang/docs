@@ -17,21 +17,21 @@
     "id": "language-guides",
     "type": "local",
     "path": "language-guides",
-    "targets": ["Language Guides"],
+    "targets": ["LanguageGuides"],
     "combined": true
   },
   {
     "id": "server-guides",
     "type": "local",
     "path": "server-guides",
-    "targets": ["Server Guides"],
+    "targets": ["ServerGuides"],
     "combined": true
   },
   {
     "id": "ecosystem-tools",
     "type": "local",
     "path": "ecosystem-tools",
-    "targets": ["Editors and Tools"],
+    "targets": ["EcosystemTools"],
     "combined": true
   },
   {

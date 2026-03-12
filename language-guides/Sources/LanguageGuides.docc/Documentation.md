@@ -1,2 +1,5 @@
-# ``Language_Guides``
+# ``LanguageGuides``
 
+@Metadata {
+    @DisplayName("Language Guides")
+}

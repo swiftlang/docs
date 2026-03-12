@@ -1,2 +1,5 @@
-# ``Editors_and_Tools``
+# ``EcosystemTools``
 
+@Metadata {
+    @DisplayName("Tools and Editors")
+}

@@ -1,2 +1,5 @@
-# ``Server_Guides``
+# ``ServerGuides``
 
+@Metadata {
+    @DisplayName("Server Guides")
+}
