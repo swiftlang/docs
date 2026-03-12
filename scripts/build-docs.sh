@@ -5,6 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCES_FILE="$SCRIPT_DIR/sources.json"
 
+# NOTE: The order of the archives in sources.json matters for merging into a combined archive, 
+# as they're listed in the order they are merged, which is driven (in this script)
+# by the ordering in the JSON.
+
 # Ensure consistent, pretty-printed DocC JSON output
 export DOCC_JSON_PRETTYPRINT=YES
 
