@@ -44,14 +44,6 @@
     "combined": true
   },
   {
-    "id": "docc-documentation",
-    "type": "git",
-    "repo": "https://github.com/swiftlang/swift-docc.git",
-    "branch": "release/6.3",
-    "docc_catalog": "Sources/docc/DocCDocumentation.docc",
-    "combined": true
-  },
-  {
     "id": "swiftpm",
     "type": "git",
     "repo": "https://github.com/swiftlang/swift-package-manager.git",
@@ -66,6 +58,14 @@
     "branch": "release/6.3",
     "targets": ["Testing"],
     "add_docc_plugin": true,
+    "combined": true
+  },
+  {
+    "id": "docc-documentation",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-docc.git",
+    "branch": "release/6.3",
+    "docc_catalog": "Sources/docc/DocCDocumentation.docc",
     "combined": true
   },
   {
