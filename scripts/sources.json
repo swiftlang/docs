@@ -3,28 +3,28 @@
     "id": "api-guidelines",
     "type": "local",
     "path": "api-guidelines",
-    "targets": ["APIGuidelines"],
+    "targets": ["API Guidelines"],
     "combined": true
   },
   {
     "id": "language-guides",
     "type": "local",
     "path": "language-guides",
-    "targets": ["LanguageGuides"],
+    "targets": ["Language Guides"],
     "combined": true
   },
   {
     "id": "server-guides",
     "type": "local",
     "path": "server-guides",
-    "targets": ["ServerGuides"],
+    "targets": ["Server Guides"],
     "combined": true
   },
   {
     "id": "ecosystem-tools",
     "type": "local",
     "path": "ecosystem-tools",
-    "targets": ["EcosystemTools"],
+    "targets": ["Editors and Tools"],
     "combined": true
   },
   {
