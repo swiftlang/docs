@@ -1,1 +1,5 @@
-# ``API_Guidelines``
+# ``APIGuidelines``
+
+@Metadata {
+    @DisplayName("API Guidelines")
+}

@@ -1,9 +1,16 @@
 [
   {
+    "id": "swift-book",
+    "type": "git",
+    "repo": "https://github.com/swiftlang/swift-book.git",
+    "docc_catalog": "TSPL.docc",
+    "combined": true
+  },
+  {
     "id": "api-guidelines",
     "type": "local",
     "path": "api-guidelines",
-    "targets": ["API Guidelines"],
+    "targets": ["APIGuidelines"],
     "combined": true
   },
   {
@@ -25,13 +32,6 @@
     "type": "local",
     "path": "ecosystem-tools",
     "targets": ["Editors and Tools"],
-    "combined": true
-  },
-  {
-    "id": "swift-book",
-    "type": "git",
-    "repo": "https://github.com/swiftlang/swift-book.git",
-    "docc_catalog": "TSPL.docc",
     "combined": true
   },
   {
