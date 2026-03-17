@@ -10,20 +10,6 @@ body:
         Use this template to report inaccurate, misleading, or incorrect content.
         If you're suggesting improvements without claiming inaccuracy, use the Enhancement template instead.
 
-  - type: dropdown
-    id: package
-    attributes:
-      label: "Documentation Package"
-      description: "Which package contains the error?"
-      options:
-        - API Guidelines
-        - Language Guides
-        - Server Guides
-        - Ecosystem Tools
-        - Not sure / Multiple packages
-    validations:
-      required: true
-
   - type: input
     id: location
     attributes:
