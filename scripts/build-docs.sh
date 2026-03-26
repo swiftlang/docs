@@ -194,17 +194,13 @@ declare -a COMBINED_ARCHIVES=()
 declare -a COMBINED_EXPECTED_IDS=()
 
 # Find the docc tool — prefer xcrun on macOS, fall back to PATH.
-# Resolved once and reused throughout.
-resolve_docc_cmd() {
-    if command -v xcrun &>/dev/null && xcrun --find docc &>/dev/null 2>&1; then
-        echo "xcrun docc"
-    elif command -v docc &>/dev/null; then
-        echo "docc"
-    else
-        echo ""
-    fi
-}
-DOCC_CMD=$(resolve_docc_cmd)
+# Resolved once as an array and reused throughout.
+DOCC_CMD=()
+if command -v xcrun &>/dev/null && xcrun --find docc &>/dev/null 2>&1; then
+    DOCC_CMD=(xcrun docc)
+elif command -v docc &>/dev/null; then
+    DOCC_CMD=(docc)
+fi
 
 # Find .doccarchive files produced by swift package generate-documentation.
 # They land in the .build directory tree; the exact path varies by toolchain.
@@ -316,11 +312,15 @@ build_source() {
         return 1
     fi
 
-    # Inject swift-docc-plugin dependency if requested
+    # Inject swift-docc-plugin dependency if requested and not already present
     if [[ "$add_docc_plugin" == "true" ]]; then
-        echo "Adding swift-docc-plugin dependency..."
-        (cd "$source_dir" && swift package add-dependency \
-            https://github.com/swiftlang/swift-docc-plugin --from 1.1.0)
+        if ! grep -q 'swift-docc-plugin' "$source_dir/Package.swift"; then
+            echo "Adding swift-docc-plugin dependency..."
+            (cd "$source_dir" && swift package add-dependency \
+                https://github.com/swiftlang/swift-docc-plugin --from 1.1.0)
+        else
+            echo "swift-docc-plugin dependency already present, skipping."
+        fi
     fi
 
     # Build based on JSON configuration:
@@ -374,7 +374,7 @@ build_source() {
             return 1
         fi
 
-        if [[ -z "$DOCC_CMD" ]]; then
+        if [[ ${#DOCC_CMD[@]} -eq 0 ]]; then
             echo "Error: 'docc' tool not found (tried xcrun and PATH)"
             return 1
         fi
@@ -386,7 +386,7 @@ build_source() {
         echo "Converting catalog with docc convert..."
         rm -rf "$output_path"
 
-        $DOCC_CMD convert "$catalog_path" --output-path "$output_path" \
+        "${DOCC_CMD[@]}" convert "$catalog_path" --output-path "$output_path" \
             "${DOCC_BUILD_FLAGS[@]}" \
             ${extra_flags[@]+"${extra_flags[@]}"}
 
@@ -450,7 +450,7 @@ if [[ ${#COMBINED_EXPECTED_IDS[@]} -gt 0 && -z "$ONLY" ]]; then
         echo "Error: no combined archives were produced despite all sources succeeding"
         FAILED+=("combined-merge")
 
-    elif [[ -z "$DOCC_CMD" ]]; then
+    elif [[ ${#DOCC_CMD[@]} -eq 0 ]]; then
         echo "Error: 'docc' tool not found, cannot merge archives"
         FAILED+=("combined-merge")
 
@@ -478,7 +478,7 @@ if [[ ${#COMBINED_EXPECTED_IDS[@]} -gt 0 && -z "$ONLY" ]]; then
                 echo "  - $(basename "$a")"
             done
 
-            if $DOCC_CMD merge "${COMBINED_ARCHIVES[@]}" \
+            if "${DOCC_CMD[@]}" merge "${COMBINED_ARCHIVES[@]}" \
                 --output-path "$COMBINED_OUTPUT"; then
                 echo "Combined archive: $COMBINED_OUTPUT"
                 SUCCEEDED+=("combined-merge")
