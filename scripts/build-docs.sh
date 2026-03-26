@@ -5,9 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCES_FILE="$SCRIPT_DIR/sources.json"
 
-# NOTE: The order of the archives in sources.json matters for merging into a combined archive, 
+# NOTE: The order of the archives in sources.json matters for merging into a combined archive,
 # as they're listed in the order they are merged, which is driven (in this script)
-# by the ordering in the JSON.
+# by the ordering in the JSON. All sources are included in the combined archive.
 
 # Ensure consistent, pretty-printed DocC JSON output
 export DOCC_JSON_PRETTYPRINT=YES
@@ -28,6 +28,7 @@ OUTPUT_DIR="$ROOT_DIR/.build-output"
 WORKSPACE="$ROOT_DIR/.workspace"
 CLEAN=false
 ONLY=""
+BRANCH=""
 
 usage() {
     cat <<EOF
@@ -36,11 +37,13 @@ Usage: $(basename "$0") [OPTIONS]
 Build and export DocC documentation archives from multiple sources.
 
 Options:
-  --output-dir <path>   Where to export built archives (default: .build-output/)
-  --workspace <path>    Where to clone external repos (default: .workspace/)
-  --clean               Remove workspace and re-clone everything
-  --only <id>           Build only a specific source by id
-  -h, --help            Show this help message
+  --output-dir <path>        Where to export built archives (default: .build-output/)
+  --workspace <path>         Where to clone external repos (default: .workspace/)
+  --clean                    Remove workspace and re-clone everything
+  --only <id>                Build only a specific source by id
+  --branch <branch>           Use this branch for git sources that have it (e.g. release/6.3).
+                             Falls back to 'main' unless source has 'fallback_branch' set.
+  -h, --help                 Show this help message
 EOF
 }
 
@@ -61,6 +64,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --only)
             ONLY="$2"
+            shift 2
+            ;;
+        --branch)
+            BRANCH="$2"
             shift 2
             ;;
         -h|--help)
@@ -101,18 +108,34 @@ for tmpl in "${TEMPLATE_FILES[@]}"; do
     fi
 done
 
+# Check whether a remote repository has a given branch (refs only, no data transfer).
+remote_has_branch() {
+    local repo_url="$1"
+    local branch_name="$2"
+    git ls-remote --heads "$repo_url" "$branch_name" 2>/dev/null | grep -q .
+}
+
+# Find the latest release/* branch in a remote repository (version-sorted).
+# Returns the full branch name (e.g. "release/1.1") or empty string if none.
+latest_release_branch() {
+    local repo_url="$1"
+    git ls-remote --heads "$repo_url" "release/*" 2>/dev/null \
+        | sed 's|.*refs/heads/||' \
+        | sort -t/ -k2 -V \
+        | tail -n 1
+}
+
 # Validate all source entries before doing any work
 validate_sources() {
     local validation_failed=false
 
     for i in $(seq 0 $((source_count - 1))); do
-        local entry entry_id entry_type entry_path entry_repo entry_branch has_targets has_docc_catalog label
+        local entry entry_id entry_type entry_path entry_repo has_targets has_docc_catalog label
         entry=$(jq ".[$i]" "$SOURCES_FILE")
         entry_id=$(echo "$entry" | jq -r '.id // empty')
         entry_type=$(echo "$entry" | jq -r '.type // empty')
         entry_path=$(echo "$entry" | jq -r '.path // empty')
         entry_repo=$(echo "$entry" | jq -r '.repo // empty')
-        entry_branch=$(echo "$entry" | jq -r '.branch // empty')
         has_targets=$(echo "$entry" | jq 'has("targets")')
         has_docc_catalog=$(echo "$entry" | jq 'has("docc_catalog")')
 
@@ -154,15 +177,17 @@ validate_sources() {
             validation_failed=true
         fi
 
-        if [[ -n "$entry_branch" && "$entry_type" != "git" ]]; then
-            echo "Validation error: $label has 'branch' but is not type 'git'"
-            validation_failed=true
-        fi
-
         local add_docc_plugin
         add_docc_plugin=$(echo "$entry" | jq -r '.add_docc_plugin // false')
         if [[ "$add_docc_plugin" == "true" && "$entry_type" != "git" ]]; then
             echo "Validation error: $label has 'add_docc_plugin' but is not type 'git'"
+            validation_failed=true
+        fi
+
+        local fallback_branch
+        fallback_branch=$(echo "$entry" | jq -r '.fallback_branch // empty')
+        if [[ -n "$fallback_branch" && "$entry_type" != "git" ]]; then
+            echo "Validation error: $label has 'fallback_branch' but is not type 'git'"
             validation_failed=true
         fi
     done
@@ -191,7 +216,7 @@ mkdir -p "$OUTPUT_DIR" "$WORKSPACE"
 declare -a SUCCEEDED=()
 declare -a FAILED=()
 declare -a COMBINED_ARCHIVES=()
-declare -a COMBINED_EXPECTED_IDS=()
+declare -a MANIFEST_ENTRIES=()
 
 # Find the docc tool — prefer xcrun on macOS, fall back to PATH.
 # Resolved once as an array and reused throughout.
@@ -246,7 +271,9 @@ install_templates() {
 }
 
 build_source() {
-    local id type path repo docc_catalog source_dir branch
+    local id type path repo docc_catalog source_dir
+    local actual_branch="main"
+    local fallback_used=false
     local entry="$1"
 
     id=$(echo "$entry" | jq -r '.id')
@@ -254,13 +281,35 @@ build_source() {
     path=$(echo "$entry" | jq -r '.path // empty')
     repo=$(echo "$entry" | jq -r '.repo // empty')
     docc_catalog=$(echo "$entry" | jq -r '.docc_catalog // empty')
-    branch=$(echo "$entry" | jq -r '.branch // empty')
-    # Default to "main" when no branch is specified
-    if [[ -z "$branch" ]]; then
-        branch="main"
+
+    # Determine which branch to use for git sources
+    if [[ "$type" == "git" && -n "$BRANCH" ]]; then
+        if remote_has_branch "$repo" "$BRANCH"; then
+            actual_branch="$BRANCH"
+        else
+            local fallback_branch
+            fallback_branch=$(echo "$entry" | jq -r '.fallback_branch // empty')
+
+            if [[ "$fallback_branch" == "latest-release" ]]; then
+                local detected
+                detected=$(latest_release_branch "$repo")
+                if [[ -n "$detected" ]]; then
+                    echo "  Note: $repo does not have branch '$BRANCH', using latest release branch '$detected'"
+                    actual_branch="$detected"
+                else
+                    echo "  Note: $repo does not have branch '$BRANCH' and no release branches found, falling back to 'main'"
+                    actual_branch="main"
+                fi
+            elif [[ -n "$fallback_branch" ]]; then
+                echo "  Note: $repo does not have branch '$BRANCH', using fallback branch '$fallback_branch'"
+                actual_branch="$fallback_branch"
+            else
+                echo "  Note: $repo does not have branch '$BRANCH', falling back to 'main'"
+                actual_branch="main"
+            fi
+            fallback_used=true
+        fi
     fi
-    local is_combined
-    is_combined=$(echo "$entry" | jq -r '.combined // false')
     local add_docc_plugin
     add_docc_plugin=$(echo "$entry" | jq -r '.add_docc_plugin // false')
 
@@ -299,13 +348,13 @@ build_source() {
     elif [[ "$type" == "git" ]]; then
         source_dir="$WORKSPACE/$id"
         if [[ -d "$source_dir/.git" ]]; then
-            echo "Updating existing clone (branch: $branch)..."
-            git -C "$source_dir" fetch --quiet origin "$branch"
-            git -C "$source_dir" checkout --quiet "$branch" 2>/dev/null || git -C "$source_dir" checkout --quiet -b "$branch" "origin/$branch"
-            git -C "$source_dir" reset --quiet --hard "origin/$branch"
+            echo "Updating existing clone (branch: $actual_branch)..."
+            git -C "$source_dir" fetch --quiet origin "$actual_branch"
+            git -C "$source_dir" checkout --quiet "$actual_branch" 2>/dev/null || git -C "$source_dir" checkout --quiet -b "$actual_branch" "origin/$actual_branch"
+            git -C "$source_dir" reset --quiet --hard "origin/$actual_branch"
         else
-            echo "Cloning $repo (branch: $branch)..."
-            git clone --quiet --branch "$branch" "$repo" "$source_dir"
+            echo "Cloning $repo (branch: $actual_branch)..."
+            git clone --quiet --branch "$actual_branch" "$repo" "$source_dir"
         fi
     else
         echo "Error: unknown type '$type'"
@@ -361,9 +410,7 @@ build_source() {
             rm -rf "${OUTPUT_DIR:?}/${output_name}.doccarchive"
             cp -R "$archive" "$OUTPUT_DIR/${output_name}.doccarchive"
 
-            if [[ "$is_combined" == "true" ]]; then
-                COMBINED_ARCHIVES+=("$OUTPUT_DIR/${output_name}.doccarchive")
-            fi
+            COMBINED_ARCHIVES+=("$OUTPUT_DIR/${output_name}.doccarchive")
         done
 
     else
@@ -390,10 +437,25 @@ build_source() {
             "${DOCC_BUILD_FLAGS[@]}" \
             ${extra_flags[@]+"${extra_flags[@]}"}
 
-        if [[ "$is_combined" == "true" ]]; then
-            COMBINED_ARCHIVES+=("$output_path")
-        fi
+        COMBINED_ARCHIVES+=("$output_path")
     fi
+
+    # Record manifest entry
+    local commit_sha=""
+    if [[ "$type" == "git" ]]; then
+        commit_sha=$(git -C "$source_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
+    elif [[ "$type" == "local" ]]; then
+        actual_branch=$(git -C "$source_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+        commit_sha=$(git -C "$source_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
+    fi
+
+    MANIFEST_ENTRIES+=("$(jq -n \
+        --arg id "$id" \
+        --arg type "$type" \
+        --arg actual "$actual_branch" \
+        --argjson fallback "$fallback_used" \
+        --arg commit "$commit_sha" \
+        '{id: $id, type: $type, actual_branch: $actual, fallback_used: $fallback, commit: $commit}')")
 
     echo "Done: $id"
 }
@@ -408,12 +470,6 @@ for i in $(seq 0 $((source_count - 1))); do
         continue
     fi
 
-    is_combined=$(echo "$entry" | jq -r '.combined // false')
-
-    if [[ "$is_combined" == "true" ]]; then
-        COMBINED_EXPECTED_IDS+=("$entry_id")
-    fi
-
     if build_source "$entry"; then
         SUCCEEDED+=("$entry_id")
     else
@@ -421,33 +477,19 @@ for i in $(seq 0 $((source_count - 1))); do
     fi
 done
 
-# Merge combined archives — only if all combined sources built successfully
-if [[ ${#COMBINED_EXPECTED_IDS[@]} -gt 0 && -z "$ONLY" ]]; then
+# Merge all archives — only when building everything (not --only)
+if [[ ${#COMBINED_ARCHIVES[@]} -gt 0 && -z "$ONLY" ]]; then
     echo ""
     echo "========================================"
     echo "Merging combined documentation archive"
     echo "========================================"
 
-    # Check that no combined source appears in the FAILED list
-    combined_failures=()
-    for cid in "${COMBINED_EXPECTED_IDS[@]}"; do
-        for fid in ${FAILED[@]+"${FAILED[@]}"}; do
-            if [[ "$cid" == "$fid" ]]; then
-                combined_failures+=("$cid")
-            fi
-        done
-    done
-
-    if [[ ${#combined_failures[@]} -gt 0 ]]; then
-        echo "Error: cannot merge — the following combined sources failed to build:"
-        for cf in "${combined_failures[@]}"; do
-            echo "  - $cf"
+    if [[ ${#FAILED[@]} -gt 0 ]]; then
+        echo "Error: cannot merge — the following sources failed to build:"
+        for fid in "${FAILED[@]}"; do
+            echo "  - $fid"
         done
         echo "Skipping merge step."
-        FAILED+=("combined-merge")
-
-    elif [[ ${#COMBINED_ARCHIVES[@]} -eq 0 ]]; then
-        echo "Error: no combined archives were produced despite all sources succeeding"
         FAILED+=("combined-merge")
 
     elif [[ ${#DOCC_CMD[@]} -eq 0 ]]; then
@@ -490,6 +532,27 @@ if [[ ${#COMBINED_EXPECTED_IDS[@]} -gt 0 && -z "$ONLY" ]]; then
     fi
 fi
 
+# Generate build manifest
+if [[ ${#MANIFEST_ENTRIES[@]} -gt 0 ]]; then
+    MANIFEST_FILE="$OUTPUT_DIR/build-manifest.json"
+    sources_json="["
+    for idx in "${!MANIFEST_ENTRIES[@]}"; do
+        if [[ $idx -gt 0 ]]; then
+            sources_json+=","
+        fi
+        sources_json+="${MANIFEST_ENTRIES[$idx]}"
+    done
+    sources_json+="]"
+
+    jq -n \
+        --arg build_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg branch "$BRANCH" \
+        --argjson sources "$sources_json" \
+        '{build_time: $build_time, branch: $branch, sources: $sources}' \
+        > "$MANIFEST_FILE"
+    echo "Build manifest: $MANIFEST_FILE"
+fi
+
 # Summary
 echo ""
 echo "========================================"
@@ -498,6 +561,12 @@ echo "========================================"
 echo "Succeeded (${#SUCCEEDED[@]}): ${SUCCEEDED[*]:-none}"
 echo "Failed    (${#FAILED[@]}): ${FAILED[*]:-none}"
 echo "Output:   $OUTPUT_DIR"
+if [[ -n "$BRANCH" ]]; then
+    echo "Branch: $BRANCH"
+fi
+if [[ -f "$OUTPUT_DIR/build-manifest.json" ]]; then
+    echo "Manifest: $OUTPUT_DIR/build-manifest.json"
+fi
 
 if [[ ${#FAILED[@]} -gt 0 ]]; then
     exit 1
