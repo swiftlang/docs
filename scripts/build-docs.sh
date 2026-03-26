@@ -190,6 +190,13 @@ validate_sources() {
             echo "Validation error: $label has 'fallback_branch' but is not type 'git'"
             validation_failed=true
         fi
+
+        local preflight
+        preflight=$(echo "$entry" | jq -r '.preflight // empty')
+        if [[ "$(echo "$entry" | jq 'has("preflight")')" == "true" && -z "$preflight" ]]; then
+            echo "Validation error: $label has 'preflight' but it is empty"
+            validation_failed=true
+        fi
     done
 
     if [[ "$validation_failed" == true ]]; then
@@ -359,6 +366,14 @@ build_source() {
     else
         echo "Error: unknown type '$type'"
         return 1
+    fi
+
+    # Run preflight command if configured
+    local preflight
+    preflight=$(echo "$entry" | jq -r '.preflight // empty')
+    if [[ -n "$preflight" ]]; then
+        echo "Running preflight: $preflight"
+        (cd "$source_dir" && bash -c "$preflight")
     fi
 
     # Inject swift-docc-plugin dependency if requested and not already present

@@ -3,7 +3,8 @@
     "id": "swift-book",
     "type": "git",
     "repo": "https://github.com/swiftlang/swift-book.git",
-    "docc_catalog": "TSPL.docc"
+    "docc_catalog": "TSPL.docc",
+    "preflight": "bin/generate-grammar"
   },
   {
     "id": "swift-migration-guide",
