@@ -56,4 +56,3 @@ body:
       placeholder: "Be specific about what you'd like to see added or changed"
     validations:
       required: true
-
