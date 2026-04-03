@@ -1,0 +1,35 @@
+name: Build documentation
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    name: Build combined documentation
+    runs-on: ubuntu-latest
+    container:
+      image: swift:6.2-noble
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: .workspace
+          key: docs-workspace-${{ hashFiles('scripts/sources.json') }}
+          restore-keys: |
+            docs-workspace-
+
+      - name: Build documentation
+        run: python3 scripts/build_docs.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: combined-documentation
+          path: .build-output/
