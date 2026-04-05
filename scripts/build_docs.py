@@ -195,6 +195,10 @@ def clone_or_update(source, workspace, ref):
             ],
             check=True,
         )
+        subprocess.run(
+            ["git", "-C", str(source_dir), "clean", "--quiet", "-fdx"],
+            check=True,
+        )
     else:
         print(f"Cloning {repo} (ref: {ref})...")
         subprocess.run(
