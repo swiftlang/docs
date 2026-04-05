@@ -30,9 +30,12 @@ jobs:
         run: apt-get update && apt-get install -y python3
 
       - name: Build documentation
-        run: python3 scripts/build_docs.py
+        run: python3 scripts/build_docs.py --output-dir "$GITHUB_WORKSPACE/build-output"
+
+      - name: List build output
+        run: ls -la "$GITHUB_WORKSPACE/build-output"
 
       - uses: actions/upload-artifact@v4
         with:
           name: combined-documentation
-          path: .build-output/
+          path: build-output/
