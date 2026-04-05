@@ -32,10 +32,10 @@ jobs:
       - name: Build documentation
         run: python3 scripts/build_docs.py --output-dir "$GITHUB_WORKSPACE/build-output"
 
-      - name: List build output
-        run: ls -la "$GITHUB_WORKSPACE/build-output"
+      - name: Package build output
+        run: tar -czf "$GITHUB_WORKSPACE/combined-documentation.tar.gz" -C "$GITHUB_WORKSPACE/build-output" .
 
       - uses: actions/upload-artifact@v4
         with:
           name: combined-documentation
-          path: build-output/
+          path: combined-documentation.tar.gz

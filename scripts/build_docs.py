@@ -195,6 +195,9 @@ def clone_or_update(source, workspace, ref):
             ],
             check=True,
         )
+        # Remove untracked files left by previous builds (e.g. swift-book's
+        # generated SummaryOfTheGrammar.md) so preflight scripts don't fail
+        # when they detect stale output from a cached workspace.
         subprocess.run(
             ["git", "-C", str(source_dir), "clean", "--quiet", "-fdx"],
             check=True,
