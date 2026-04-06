@@ -1,0 +1,24 @@
+---
+name: "Content Issue"
+description: >-
+  Report an error, suggest an improvement,
+  or flag a problem with existing documentation
+labels: ["triage needed"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: "Page URL"
+      description: >-
+        Link to the page with the issue
+      placeholder: "https://www.swift.org/documentation/..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description"
+      description: "What's wrong or what could be better?"
+    validations:
+      required: true

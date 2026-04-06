@@ -1,14 +1,6 @@
-blank_issues_enabled: false
+---
+blank_issues_enabled: true
 contact_links:
-  - name: "💬 Swift Documentation Forums"
+  - name: Swift Documentation Forums
     url: "https://forums.swift.org/c/development/swift-docc/80"
-    about: "Discuss documentation content, propose major additions, or ask questions about Swift documentation"
-  - name: "🛠️ Documentation Tooling Forums"
-    url: "https://forums.swift.org/c/92"
-    about: "Questions about using Swift-DocC, documentation build tools, or authoring documentation"
-  - name: "📚 Swift Documentation Website"
-    url: "https://www.swift.org/documentation/"
-    about: "View the published Swift documentation"
-  - name: "📖 Contributing Guide"
-    url: "https://github.com/swiftlang/docs/blob/main/CONTRIBUTING.md"
-    about: "Read about style guidelines, proposing content, and the contribution process"
+    about: "Discuss documentation content or propose major additions"
