@@ -567,7 +567,7 @@ def main():
                     print(f"  - {ma}")
                 failed.append("combined-merge")
             else:
-                combined_output = output_dir / f"{version}.doccarchive"
+                combined_output = output_dir / f"{version}"
                 try:
                     merge_archives(all_archives, combined_output, docc_cmd)
                     succeeded.append("combined-merge")
