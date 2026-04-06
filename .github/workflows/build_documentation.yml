@@ -1,0 +1,41 @@
+name: Build documentation
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    name: Build combined documentation
+    runs-on: ubuntu-latest
+    container:
+      image: swiftlang/swift:nightly-main-jammy
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/cache@v4
+        with:
+          path: .workspace
+          key: docs-workspace-${{ hashFiles('scripts/sources.json') }}
+          restore-keys: |
+            docs-workspace-
+
+      - name: Install Python
+        run: apt-get update && apt-get install -y python3
+
+      - name: Build documentation
+        run: python3 scripts/build_docs.py --output-dir "$GITHUB_WORKSPACE/build-output"
+
+      - name: Package build output
+        run: tar -czf "$GITHUB_WORKSPACE/combined-documentation.tar.gz" -C "$GITHUB_WORKSPACE/build-output" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: combined-documentation
+          path: combined-documentation.tar.gz
