@@ -1,0 +1,4 @@
+**/*.gitkeep
+**/*.html
+**/Package.swift
+common/README
