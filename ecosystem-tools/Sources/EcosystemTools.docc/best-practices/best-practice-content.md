@@ -36,7 +36,7 @@ Provide code examples that illustrate the guidance, using DocC's snippets featur
 
   - For anything other than trivial code examples, create and use a snippet Swift file to verify that code samples compile.
   - To use a snippet, create a Swift file in the Snippets directory and reference the snippet in this template.
-  - Reference the snippet in the best practice using the @Snippet directive. For example, if you create a snippet file named `ESG-0005.swift` in the Snippets directory, use the directive reference: `@Snippet(path: "EcosystemTools/Snippets/ESG-0005")`
+  - Reference the snippet in the best practice using the @Snippet directive. For example, if you create a snippet file named `BSP-0005.swift` in the Snippets directory, use the directive reference: `@Snippet(path: "EcosystemTools/Snippets/BSP-0005")`
 
 ### Share alternatives considered
 
