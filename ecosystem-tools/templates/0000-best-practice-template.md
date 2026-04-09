@@ -11,7 +11,7 @@
 
 ## Overview
 
-🟢 - lead sentence details the core of what the good practice is. The overview in general should be concise and to the point.
+🟢 - Summarize the core guidance in a lead sentence. Keep the overview concise and to the point.
 
 Extend the overview with an additional paragraph providing more background if needed, preferring to link to external specifications, documentation, etc as needed instead of providing it inline.
 
@@ -27,7 +27,7 @@ Extend the overview with an additional paragraph providing more background if ne
 
 Provide a clear, complete, ideally "real" example of the best practice. If describing an API pattern, show both the implementation side and "call site" usage to illustrate it.
 
-If there's supporting tasks for the best practice, include the specifics of how to enable them in further H3 sections. Write The H3 section headings as imperative verb phrases that describe what the example is showing and what you should do for the best practice.
+If there's supporting tasks for the best practice, include the specifics of how to enable them in further H3 sections. Write the H3 section headings as imperative verb phrases that describe what the example shows and what to do for the best practice.
 
 <!-- Use Snippets to verify code examples:
 - For anything other than trivial code examples, create and use a snippet Swift file to verify that code samples compile.
@@ -51,4 +51,4 @@ Lead with a 🔴 red stoplight emoji to indicate an anti-pattern and what not to
 
 | Last updated | Swift Versions |
 | ---- | ---- |
-| February 2026 | Swift >= 6.0+ |
+| February 2026 | Swift >= 6.0 |
