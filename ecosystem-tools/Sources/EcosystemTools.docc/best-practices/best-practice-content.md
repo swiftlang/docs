@@ -1,4 +1,4 @@
-# Contribute a Swift Server best practice for internal adopters
+# Contribute a Swift best practice
 
 Create clear guidance with examples for best practice documentation.
 
@@ -11,7 +11,7 @@ These articles use a specific naming scheme to enable consistent URLs when they'
 
 Use the [template provided in the Ecosystem docs repository](https://github.com/swiftlang/docs/blob/main/ecosystem-tools/templates/0000-best-practice-template.md) to create guidance.
 Use a numbered filename to contain the content.
-Prefix guidelines from the ecosystem group with `ESG-` and using the next number available.
+Prefix guidelines from the ecosystem group with `BSP-` and using the next number available.
 When published with DocC, the filename of the article becomes a component in the URL and provides a consistent reference point.
 Don't rename an existing article, or re-use a number from other guides that have been merged.
 
