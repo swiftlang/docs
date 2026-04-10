@@ -35,7 +35,7 @@ jobs:
       - name: Package build output
         run: tar -czf "$GITHUB_WORKSPACE/combined-documentation.tar.gz" -C "$GITHUB_WORKSPACE/build-output" .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: combined-documentation
           path: combined-documentation.tar.gz
