@@ -209,7 +209,6 @@ For most projects, this distinction doesn't matter.
 However, packages with complex C dependencies can behave differently when built natively on Linux versus cross-compiled.
 
 
-
 ### Build with VS Code using a Dev Container
 
 Visual Studio Code supports the Dev Container feature that lets you open, build, and debug your project within a container running on your local machine.
