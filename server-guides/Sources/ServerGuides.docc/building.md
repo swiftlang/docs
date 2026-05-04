@@ -20,7 +20,8 @@ swift build
 ```
 
 Debug builds include full debugging symbols and runtime safety checks, which are essential during active development.
-The compiler skips most optimizations to keep compilation times fast, letting you quickly test changes.
+The compiler skips most optimizations to keep compilation times fast and preserve maximum debugging information.
+This lets you quickly test changes and debug your app using lldb and breakpoints.
 However, skipping optimizations can come at a significant cost to runtime performance.
 Debug builds typically run more slowly than their release counterparts.
 
@@ -40,6 +41,18 @@ Release builds still include some debugging information for crash analysis, but 
 
 Beyond choosing debug or release mode, several compiler flags can fine-tune your builds for specific scenarios.
 
+### Build specific products
+
+If your package defines multiple executables or library products, Swift Package Manager builds everything declared in the package by default.
+Build only what you need using the `--product` flag:
+
+```bash
+swift build --product MyAPIServer
+```
+
+Building a specific product is useful in monorepo setups or packages with multiple deployment targets.
+It avoids compiling tools or test utilities you don't need for a given deployment.
+
 ### Enable cross-module optimization
 
 Swift supports cross-module optimization, which lets the compiler optimize code across module boundaries:
@@ -57,29 +70,6 @@ For code that frequently calls small functions across module boundaries, this ca
 However, results vary by project because optimizations are specific to your code.
 Always benchmark your specific workload with and without this flag before deploying to production.
 
-### Build specific products
-
-If your package defines multiple executables or library products, Swift Package Manager builds everything declared in the package by default.
-Build only what you need using the `--product` flag:
-
-```bash
-swift build --product MyAPIServer
-```
-
-Building a specific product is useful in monorepo setups or packages with multiple deployment targets.
-It avoids compiling tools or test utilities you don't need for a given deployment.
-
-### Use package traits
-
-Swift 6.1 introduces another way to control what gets built.
-Packages can define *traits*, which enable or disable optional features at build time.
-
-With package traits, a package can define additional, optional code that you enable for your service or library.
-You can toggle experimental APIs, performance monitoring, or deployment settings without creating separate branches.
-In package manifests, traits are clearer than preprocessor macros or environment variable–based feature flags.
-
-For details on defining traits, conditional dependencies, trait unification, and advanced use cases, see [Package Traits](https://docs.swift.org/swiftpm/documentation/packagemanagerdocs/packagetraits).
-
 ## Review your build artifacts
 
 After compiling, locate your build artifacts.
@@ -93,13 +83,8 @@ swift build --show-bin-path
 swift build --show-bin-path -c release
 ```
 
-Typical paths include:
-
-- Linux (x86_64): `.build/x86_64-unknown-linux/debug` or `.build/x86_64-unknown-linux/release`
-- macOS (Intel): `.build/x86_64-apple-macosx/debug` or `.build/x86_64-apple-macosx/release`
-- macOS (Apple silicon): `.build/arm64-apple-macosx/debug` or `.build/arm64-apple-macosx/release`
-
-The `--show-bin-path` flag is useful for deployment scripts where you need to copy the build artifact to a specific location without hardcoding platform-specific paths.
+The build products are written to the scratch path, which defaults to `.build`, but the specific location can vary based on platform or Swift compiler.
+Use the `--show-bin-path` flag in deployment scripts to locate the build product without hardcoding platform-specific paths.
 
 ### Build services for other platforms
 
@@ -112,7 +97,7 @@ Swift provides two main approaches for cross-platform building.
 
 #### Build with Linux containers
 
-On macOS, you can use [Container](https://github.com/apple/container) or the Docker CLI to create Linux build artifacts.
+On macOS, you can use [Container](https://github.com/apple/container) or the Docker CLI to verify your project builds under Linux.
 Apple publishes official Swift Docker images to [Docker Hub](https://hub.docker.com/_/swift), which provide complete Linux build environments.
 
 To build your application using the latest Swift release image:
@@ -129,10 +114,10 @@ docker run --rm -it \
   swift:latest swift build
 ```
 
-These commands mount your current directory into the container and run `swift build` inside a Linux environment.
+These commands mount your current directory as `/code` in the container, set it as the working directory, and run `swift build` inside the Linux environment.
 The `swift:latest` container image provides this environment and `swift build` produces Linux-compatible build artifacts.
 
-If you're on Apple silicon and need to target x86_64 Linux servers, specify the platform explicitly:
+If you're on Apple silicon and need to target x86_64 Linux servers, you need to specify the target platform with the `--platform` option:
 
 ```bash
 # Build with Container
@@ -155,9 +140,9 @@ The `-e QEMU_CPU=max` environment variable enables the maximum set of CPU featur
 
 To build your code into a container, you typically use a container declaration — a Dockerfile or Containerfile — that specifies all the steps to assemble the container image holding your build artifacts.
 Container-based builds work well in CI/CD pipelines and for validating that your code builds cleanly on Linux.
-However, Docker containers can be slower than native builds, especially on Apple silicon where x86_64 containers run through emulation.
+However, Docker container builds can be slower than native builds, especially on Apple silicon where x86_64 containers run through emulation.
 
-For a detailed example of creating a container declaration to build and package your application, see [Packaging Swift Server Applications](./packaging.md).
+For more information on packaging your application or service, read [Packaging Swift Server Applications](./packaging.md).
 
 #### Choose static or dynamic linking for the standard library
 
@@ -181,6 +166,8 @@ These executables bundle the Swift runtime directly:
 | Version management | Must match runtime version on system | Each artifact includes its own runtime version |
 
 For deploying to VMs or bare metal where you don't control the system configuration, static linking removes the dependency on a pre-installed Swift runtime.
+
+> Note: This technique doesn't apply on Apple platforms.
 
 #### Cross-compile with the Static Linux SDK
 
