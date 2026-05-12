@@ -85,6 +85,13 @@
       "targets": ["ServerGuides"]
     },
     {
+      "id": "swift-android",
+      "type": "git",
+      "repo": "https://github.com/swiftlang/swift-android-examples.git",
+      "ref": "main",
+      "targets": ["SwiftAndroid"]
+    },
+    {
       "id": "swift-server-todos-tutorial",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-server-todos-tutorial.git",
