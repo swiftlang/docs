@@ -11,6 +11,8 @@ The [Ecosystem steering group](https://www.swift.org/ecosystem-steering-group/) 
 Contributions to best practice content require coordination with the Ecosystem steering group.
 The group is establishing review processes and building an initial set of guides before broadening participation.
 
+The Ecosystem steering group is also reviewing the best practices after every new minor Swift release to ensure the best practices stay up-to-date and relevant.
+
 
 ### Create a guidance article
 
