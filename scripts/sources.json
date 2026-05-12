@@ -69,7 +69,7 @@
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-embedded-examples.git",
       "ref": "main",
-      "docc_catalog": "Sources/EmbeddedSwift/Documentation.docc"
+      "docc_catalog": "Sources/EmbeddedSwift/EmbeddedSwift.docc"
     },
     {
       "id": "swift-wasm",
