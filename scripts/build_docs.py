@@ -20,8 +20,20 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+class ArchiveFetchError(Exception):
+    """Fatal failure fetching or extracting an archive source.
+
+    Raised by fetch_archive() when a download, extraction, or archive
+    resolution step fails. Propagated by main() to abort the entire build,
+    rather than being collected into the per-source failure list.
+    """
 
 
 # Common DocC build flags applied to all documentation builds
@@ -123,9 +135,10 @@ def validate_sources(config):
         entry_type = entry.get("type", "")
         if not entry_type:
             errors.append(f"{label} is missing 'type'")
-        elif entry_type not in ("local", "git"):
+        elif entry_type not in ("local", "git", "archive"):
             errors.append(
-                f"{label} has unknown type '{entry_type}' (expected 'local' or 'git')"
+                f"{label} has unknown type '{entry_type}' "
+                "(expected 'local', 'git', or 'archive')"
             )
 
         if entry_type == "local" and not entry.get("path"):
@@ -137,16 +150,50 @@ def validate_sources(config):
         if entry_type == "git" and not entry.get("ref"):
             errors.append(f"{label} is type 'git' but missing 'ref'")
 
-        has_targets = "targets" in entry
-        has_docc_catalog = "docc_catalog" in entry
-
-        if not has_targets and not has_docc_catalog:
-            errors.append(f"{label} must have either 'targets' or 'docc_catalog'")
-
-        if has_targets and has_docc_catalog:
-            errors.append(
-                f"{label} has both 'targets' and 'docc_catalog' (they are mutually exclusive)"
+        if entry_type == "archive":
+            if not entry.get("url"):
+                errors.append(f"{label} is type 'archive' but missing 'url'")
+            docc_archive_name = entry.get("docc_archive_name", "")
+            if not docc_archive_name:
+                errors.append(
+                    f"{label} is type 'archive' but missing 'docc_archive_name'"
+                )
+            elif not docc_archive_name.endswith(".doccarchive"):
+                errors.append(
+                    f"{label} 'docc_archive_name' must end with '.doccarchive' "
+                    f"(got '{docc_archive_name}')"
+                )
+            archive_format = entry.get("format", "tar.gz")
+            if archive_format != "tar.gz":
+                errors.append(
+                    f"{label} has unsupported 'format' '{archive_format}' "
+                    "(only 'tar.gz' is supported)"
+                )
+            disallowed_for_archive = (
+                "targets", "docc_catalog", "path", "repo", "ref",
+                "preflight", "add_docc_plugin", "extra_flags",
             )
+            for field in disallowed_for_archive:
+                if field in entry:
+                    errors.append(
+                        f"{label} is type 'archive' but has '{field}' "
+                        "(not allowed for archive sources)"
+                    )
+
+        if entry_type in ("local", "git"):
+            has_targets = "targets" in entry
+            has_docc_catalog = "docc_catalog" in entry
+
+            if not has_targets and not has_docc_catalog:
+                errors.append(
+                    f"{label} must have either 'targets' or 'docc_catalog'"
+                )
+
+            if has_targets and has_docc_catalog:
+                errors.append(
+                    f"{label} has both 'targets' and 'docc_catalog' "
+                    "(they are mutually exclusive)"
+                )
 
         if entry.get("add_docc_plugin") and entry_type != "git":
             errors.append(f"{label} has 'add_docc_plugin' but is not type 'git'")
@@ -210,6 +257,54 @@ def clone_or_update(source, workspace, ref):
         )
 
     return source_dir
+
+
+def fetch_archive(source, workspace):
+    """Download and extract a pre-built .doccarchive from a URL.
+
+    Always re-downloads (no caching). Returns the Path to the extracted
+    .doccarchive directory. Raises ArchiveFetchError on any failure so the
+    caller can abort the whole build.
+    """
+    source_id = source["id"]
+    url = source["url"]
+    docc_archive_name = source["docc_archive_name"]
+
+    download_dir = workspace / "_downloads" / source_id
+    if download_dir.exists():
+        shutil.rmtree(str(download_dir))
+    download_dir.mkdir(parents=True)
+
+    filename = Path(url).name or f"{source_id}.tar.gz"
+    download_path = download_dir / filename
+    extract_dir = download_dir / "extracted"
+    extract_dir.mkdir()
+
+    print(f"Downloading {url}...")
+    try:
+        urllib.request.urlretrieve(url, str(download_path))
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+        raise ArchiveFetchError(
+            f"failed to download archive for '{source_id}' from {url}: {e}"
+        ) from e
+
+    print(f"Extracting to {extract_dir}...")
+    try:
+        with tarfile.open(str(download_path), "r:gz") as tar:
+            tar.extractall(path=str(extract_dir), filter="data")
+    except (tarfile.TarError, OSError, ValueError) as e:
+        raise ArchiveFetchError(
+            f"failed to extract archive for '{source_id}': {e}"
+        ) from e
+
+    matches = [p for p in extract_dir.rglob(docc_archive_name) if p.is_dir()]
+    if not matches:
+        raise ArchiveFetchError(
+            f"'{docc_archive_name}' not found in archive for '{source_id}'"
+        )
+    archive_path = min(matches, key=lambda p: len(p.parts))
+    print(f"Found {docc_archive_name} at {archive_path}")
+    return archive_path
 
 
 def find_docc_catalog_for_target(source_dir, target):
@@ -300,6 +395,24 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
     print("=" * 40)
     print(f"Building: {source_id}")
     print("=" * 40)
+
+    if source_type == "archive":
+        archive_path = fetch_archive(source, workspace)
+        dest = temp_archive_dir / f"{source_id}.doccarchive"
+        if dest.exists():
+            shutil.rmtree(str(dest))
+        shutil.copytree(str(archive_path), str(dest))
+        print(f"Copied {archive_path} -> {dest}")
+
+        manifest_entry = {
+            "id": source_id,
+            "type": "archive",
+            "ref": source.get("version_label", ""),
+            "commit": "",
+            "url": source["url"],
+        }
+        print(f"Done: {source_id}")
+        return [dest], manifest_entry
 
     # Resolve source directory
     if source_type == "local":
@@ -514,7 +627,28 @@ def main():
     all_archives = []
     manifest_entries = []
 
-    for source in sources:
+    # Preflight: fetch archive-type sources first so network or extraction
+    # failures abort the run before any slow git clones or swift builds.
+    archive_sources = [s for s in sources if s["type"] == "archive"]
+    other_sources = [s for s in sources if s["type"] != "archive"]
+
+    for source in archive_sources:
+        source_id = source["id"]
+        if args.only and source_id != args.only:
+            continue
+        try:
+            archives, manifest_entry = build_source(
+                source, root_dir, workspace, common_dir,
+                temp_archive_dir, docc_cmd, env,
+            )
+        except ArchiveFetchError as e:
+            print(f"Fatal: {e}")
+            sys.exit(1)
+        succeeded.append(source_id)
+        all_archives.extend(archives)
+        manifest_entries.append(manifest_entry)
+
+    for source in other_sources:
         source_id = source["id"]
 
         # Filter if --only is set
