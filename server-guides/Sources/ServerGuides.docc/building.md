@@ -1,6 +1,8 @@
-# Building Swift Server Applications
+# Building Swift server applications
 
 Assemble your server applications using Swift Package Manager.
+
+## Overview
 
 Use [Swift Package Manager](/documentation/package-manager/) to build server applications.
 It provides a cross-platform foundation for building Swift code.
@@ -70,13 +72,13 @@ For code that frequently calls small functions across module boundaries, this ca
 However, results vary by project because optimizations are specific to your code.
 Always benchmark your specific workload with and without this flag before deploying to production.
 
-### Preserve debug information for symbolication
+## Preserve debug information for symbolication
 
 Release builds optimize for performance and don't embed DWARF debug information by default.
 Without DWARF, a crashing binary's stack trace reports raw addresses instead of function names, files, and line numbers.
 You have two ways to keep symbolication working: embed the debug information in the binary, or split it into a sidecar file you ship separately.
 
-#### Embed DWARF in a release build
+### Embed DWARF in a release build
 
 Pass `-g` to the Swift compiler when building for release:
 
@@ -100,7 +102,7 @@ file .build/release/MyServer
 
 Binaries built this way are larger — often two to five times the size of a stripped release binary — but they need no companion file at symbolication time.
 
-#### Split debug information into a sidecar file
+### Split debug information into a sidecar file
 
 For a smaller deployable artifact, separate the debug information into its own file and strip the original binary.
 This is the layout Linux distributions use for `-debuginfo` and `-dbgsym` packages.
@@ -121,7 +123,7 @@ objcopy --add-gnu-debuglink=MyServer.debug MyServer
 You now have two artifacts: a small, stripped `MyServer` to ship in your container or distribution package, and a `MyServer.debug` to publish to a symbol server or ship in a companion debug-info package.
 For how symbolicators consume the sidecar at crash time, see <doc:debugging-a-service-using-a-backtrace#Map-a-frame-to-source>.
 
-#### Verify build IDs match
+### Verify build IDs match
 
 A sidecar is only useful if it shares a build ID with the binary it describes.
 The linker writes the build ID into a `.note.gnu.build-id` section that survives stripping, and symbolicators use it to pair the two files.
@@ -136,23 +138,7 @@ readelf -n MyServer.debug | grep 'Build ID'
 Both commands print the same hexadecimal value when the files match.
 A mismatch means the binary and sidecar came from different builds; in that case the sidecar can't symbolicate the binary and you need to rebuild both together.
 
-## Review your build artifacts
-
-After compiling, locate your build artifacts.
-Swift Package Manager places them in directories that vary by platform and architecture:
-
-```bash
-# Show where debug build artifacts are located
-swift build --show-bin-path
-
-# Show where release build artifacts are located
-swift build --show-bin-path -c release
-```
-
-The build products are written to the scratch path, which defaults to `.build`, but the specific location can vary based on platform or Swift compiler.
-Use the `--show-bin-path` flag in deployment scripts to locate the build product without hardcoding platform-specific paths.
-
-### Build services for other platforms
+## Build for another platform
 
 Swift build artifacts are both platform- and architecture-specific.
 Artifacts you create on macOS run only on macOS; those you create on Linux run only on Linux.
@@ -161,7 +147,7 @@ This creates a challenge when you work on macOS and deploy to Linux servers.
 You can use Xcode for development, but it can't produce Linux artifacts for deployment.
 Swift provides two main approaches for cross-platform building.
 
-#### Build with Linux containers
+### Build with Linux containers
 
 On macOS, you can use [Container](https://github.com/apple/container) or the Docker CLI to verify your project builds under Linux.
 Apple publishes official Swift Docker images to [Docker Hub](https://hub.docker.com/_/swift), which provide complete Linux build environments.
@@ -210,7 +196,13 @@ However, Docker container builds can be slower than native builds, especially on
 
 For more information on packaging your application or service, read [Packaging Swift Server Applications](./packaging.md).
 
-#### Choose static or dynamic linking for the standard library
+### Build with a VS Code Dev Container
+
+Visual Studio Code supports the Dev Container feature that lets you open, build, and debug your project within a container running on your local machine.
+The Dev Container builds your code in the Linux environment that the container provides.
+For more information on using a Dev Container, read [Visual Studio Code Dev Containers](https://docs.swift.org/vscode/documentation/userdocs/remote-dev/).
+
+### Choose static or dynamic linking for the standard library
 
 By default, Swift build artifacts link the standard library dynamically.
 This keeps individual build artifacts smaller, and multiple programs can share a single copy of the Swift runtime.
@@ -235,7 +227,7 @@ For deploying to VMs or bare metal where you don't control the system configurat
 
 > Note: This technique doesn't apply on Apple platforms.
 
-#### Cross-compile with the Static Linux SDK
+### Cross-compile with the Static Linux SDK
 
 If the performance overhead of Docker-based builds affects your workflow, Swift 5.9 and later provide Static Linux SDKs.
 Find the link to install the static Linux SDK on the [install page at Swift.org](https://www.swift.org/install/), and detailed instructions in the article [Getting Started with the Static Linux SDK](https://www.swift.org/documentation/articles/static-linux-getting-started.html).
@@ -261,12 +253,21 @@ your code can't use `dlopen` or similar mechanisms to dynamically load libraries
 For most projects, this distinction doesn't matter.
 However, packages with complex C dependencies can behave differently when built natively on Linux versus cross-compiled.
 
+## Locate your build artifacts
 
-### Build with VS Code using a Dev Container
+After compiling, locate your build artifacts.
+Swift Package Manager places them in directories that vary by platform and architecture:
 
-Visual Studio Code supports the Dev Container feature that lets you open, build, and debug your project within a container running on your local machine.
-The Dev Container builds your code in the Linux environment that the container provides.
-For more information on using a Dev Container, read [Visual Studio Code Dev Containers](https://docs.swift.org/vscode/documentation/userdocs/remote-dev/).
+```bash
+# Show where debug build artifacts are located
+swift build --show-bin-path
+
+# Show where release build artifacts are located
+swift build --show-bin-path -c release
+```
+
+The build products are written to the scratch path, which defaults to `.build`, but the specific location can vary based on platform or Swift compiler.
+Use the `--show-bin-path` flag in deployment scripts to locate the build product without hardcoding platform-specific paths.
 
 ### Inspect a binary
 
