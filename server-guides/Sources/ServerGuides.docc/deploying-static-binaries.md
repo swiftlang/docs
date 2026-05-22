@@ -120,6 +120,32 @@ container build -t <my-app>:latest .
 > If you need a shell for troubleshooting,
 > use a slim base image during development and switch to `scratch` for production.
 
+### Include the backtracer for crash diagnostics
+
+A static binary in a `scratch` container has no toolchain layout for the runtime
+to fall back on, so the location where it expects to find `swift-backtrace` doesn't exist.
+To get backtraces from crashes, copy the static helper from a Swift container image
+into your final image and explicitly pass its path to the runtime:
+
+```Dockerfile
+FROM swift:6.2-noble AS toolchain
+
+FROM scratch
+COPY --from=toolchain /usr/libexec/swift/linux/swift-backtrace-static /swift-backtrace
+COPY .build/release/<executable-name> /
+
+ENV SWIFT_BACKTRACE=enable=yes,interactive=no,symbolicate=off,swift-backtrace=/swift-backtrace
+
+EXPOSE 8080
+ENTRYPOINT ["/<executable-name>"]
+```
+
+The `swift-backtrace=/swift-backtrace` setting overrides the runtime's default search
+and points it to the correct location.
+
+For the full set of `SWIFT_BACKTRACE` options, see <doc:swift-backtrace-configuration>.
+To debug your service using a captured trace, see <doc:debugging-a-service-using-a-backtrace>.
+
 ### Build and publish with Swift Container Plugin
 
 The [Swift Container Plugin](https://github.com/apple/swift-container-plugin)

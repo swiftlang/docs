@@ -70,6 +70,72 @@ For code that frequently calls small functions across module boundaries, this ca
 However, results vary by project because optimizations are specific to your code.
 Always benchmark your specific workload with and without this flag before deploying to production.
 
+### Preserve debug information for symbolication
+
+Release builds optimize for performance and don't embed DWARF debug information by default.
+Without DWARF, a crashing binary's stack trace reports raw addresses instead of function names, files, and line numbers.
+You have two ways to keep symbolication working: embed the debug information in the binary, or split it into a sidecar file you ship separately.
+
+#### Embed DWARF in a release build
+
+Pass `-g` to the Swift compiler when building for release:
+
+```bash
+swift build -c release -Xswiftc -g
+```
+
+If your package also compiles C or C++ sources, forward `-g` to the C compiler as well:
+
+```bash
+swift build -c release -Xswiftc -g -Xcc -g
+```
+
+Confirm the resulting binary contains DWARF sections:
+
+```bash
+file .build/release/MyServer
+# .build/release/MyServer: ELF 64-bit LSB pie executable, ...,
+#   with debug_info, not stripped
+```
+
+Binaries built this way are larger — often two to five times the size of a stripped release binary — but they need no companion file at symbolication time.
+
+#### Split debug information into a sidecar file
+
+For a smaller deployable artifact, separate the debug information into its own file and strip the original binary.
+This is the layout Linux distributions use for `-debuginfo` and `-dbgsym` packages.
+
+```bash
+cd .build/release
+
+# Copy debug sections into a sidecar file.
+objcopy --only-keep-debug MyServer MyServer.debug
+
+# Remove debug information from the deployed binary.
+objcopy --strip-debug --strip-unneeded MyServer
+
+# Record a link from the stripped binary to its sidecar.
+objcopy --add-gnu-debuglink=MyServer.debug MyServer
+```
+
+You now have two artifacts: a small, stripped `MyServer` to ship in your container or distribution package, and a `MyServer.debug` to publish to a symbol server or ship in a companion debug-info package.
+For how symbolicators consume the sidecar at crash time, see <doc:debugging-a-service-using-a-backtrace#Map-a-frame-to-source>.
+
+#### Verify build IDs match
+
+A sidecar is only useful if it shares a build ID with the binary it describes.
+The linker writes the build ID into a `.note.gnu.build-id` section that survives stripping, and symbolicators use it to pair the two files.
+
+Read the build ID from each file:
+
+```bash
+readelf -n MyServer       | grep 'Build ID'
+readelf -n MyServer.debug | grep 'Build ID'
+```
+
+Both commands print the same hexadecimal value when the files match.
+A mismatch means the binary and sidecar came from different builds; in that case the sidecar can't symbolicate the binary and you need to rebuild both together.
+
 ## Review your build artifacts
 
 After compiling, locate your build artifacts.
