@@ -12,24 +12,23 @@ The helper reads the crashed process's memory, walks each thread's stack,
 symbolicates frames, and writes the result before the original process exits.
 
 This two-process design keeps the signal handler small and signal-safe,
-and lets the backtracer use ordinary Swift code to format output and look up symbols.
+and lets the backtracer use unconstrained Swift code to look up symbols and format output.
 
-The runtime only installs its signal handler for a given signal if no handler
-is already in place, and only sets up an alternate signal stack if one isn't
+The runtime only installs its signal handler for a given signal if there isn't one
+already in place, and only sets up an alternate signal stack if one isn't
 already configured.
-A library that installs its own handler for one of the catchable signals —
+Any library that installs its own handler for one of the catchable signals —
 even `SIG_IGN` — silently disables backtracing for that signal.
 
-You configure the backtracer through the `SWIFT_BACKTRACE` environment variable.
-It accepts a comma-separated list of `key=value` pairs:
+You configure the backtracer through the `SWIFT_BACKTRACE` environment variable
+with  a comma-separated list of `key=value` pairs:
 
 ```bash
 SWIFT_BACKTRACE=enable=yes,interactive=no,format=json,output-to=/var/log/crashes/
 ```
 
 The defaults target interactive use at a terminal.
-For server deployments, the most common adjustments are
-`interactive=no` for containers without a TTY,
+For server deployments, common adjustments are `interactive=no` for containers without a TTY,
 and either `format=json` or `output-to=<path>` so traces are written to a location your log pipeline can ingest.
 
 ### Enabling and presentation
@@ -49,7 +48,7 @@ When `output-to` points at a file, the `tty` resolutions above are overridden:
 
 | Option | Values | Default | Notes |
 |---|---|---|---|
-| `threads` | `crashed`, `all`, `preset` | `preset` | `crashed` shows only the failing thread; `all` is useful for deadlocks. |
+| `threads` | `crashed`, `all`, `preset` | `preset` | `crashed` shows only the failing thread; `all` is useful to debug deadlocks. |
 | `registers` | `none`, `crashed`, `all`, `preset` | `preset` | Whether to dump CPU registers alongside frames. |
 | `images` | `none`, `mentioned`, `all`, `preset` | `preset` | Loaded shared-library list; `mentioned` includes only those referenced by frames. |
 | `limit` | integer, `none` | `64` | Maximum frames per thread, to prevent runaway output on infinite recursion. |
@@ -61,14 +60,14 @@ When the captured stack has more than `limit` frames, the backtracer keeps
 and `limit - 1 - top` frames from the bottom (the entry into the program),
 joined by a `...` marker.
 For example, a 10-frame stack with `limit=5,top=2` shows frames 10, 9, then
-`...`, then 2, 1 — letting you see both where execution started and where
+`...`, then 2, and 1. This lets you see both where execution started and where
 the fault occurred when a runaway recursion exceeds the limit.
 
 ### Unwinding and symbolication
 
 | Option | Values | Default | Notes |
 |---|---|---|---|
-| `unwind` | `auto`, `fast`, `precise` | `auto` | `fast` uses frame pointers only; `precise` consults DWARF unwind info. `auto` picks per-frame. |
+| `unwind` | `auto`, `fast`, `precise` | `auto` | `fast` uses frame pointers only; `precise` consults DWARF unwind information. `auto` picks per-frame. |
 | `symbolicate` | `full`, `fast`, `off` | `full` | `full` resolves inlined frames using DWARF; `fast` resolves only the outermost symbol; `off` reports raw addresses. |
 | `cache` | `yes`, `no` | `yes` | Caches symbol lookups across frames. |
 
@@ -84,7 +83,7 @@ To resolve addresses from a captured trace using either form, see <doc:debugging
 | `format` | `text`, `json` | `text` | JSON is structured for log aggregators. |
 | `output-to` | `stderr`, `stdout`, file path, directory path | `stderr` | If the path resolves to an existing directory, the backtracer writes each crash to a uniquely named file inside it. Otherwise the backtracer treats the path as a filename. |
 
-A text-format trace looks like this (abbreviated; registers and image list omitted):
+An abbreviated text-format trace looks something like this (the registers and image list omitted):
 
 ```
 *** Signal 11: Backtracing from 0xaaaaaaaa1804... done ***
@@ -111,10 +110,10 @@ For the same crash represented as JSON, see <doc:swift-backtrace-configuration#E
 JSON output produces one object per crash, with a top-level
 `description` describing the failure, a `faultAddress`, `platform`,
 `architecture`, and a `threads` array containing per-thread frame lists,
-along with registers when configured. See <doc:swift-backtrace-configuration#JSON-crash-log-schema>
-for the full schema.
+along with registers when configured.
+See <doc:swift-backtrace-configuration#JSON-crash-log-schema> for the full schema.
 
-Pipe the JSON output to your log shipper or write it to a mounted volume:
+Pipe the JSON output to a process that ships off your logs or write it to a mounted volume:
 
 ```bash
 SWIFT_BACKTRACE=format=json,output-to=/var/crash-logs/
@@ -124,7 +123,7 @@ SWIFT_BACKTRACE=format=json,output-to=/var/crash-logs/
 
 | Option | Values | Default | Notes |
 |---|---|---|---|
-| `timeout` | duration (`30s`), `none` | `30s` | How long the runtime waits for the backtracer to finish. |
+| `timeout` | duration (`30s`), `none` | `30s` | How long the runtime waits for the backtrace to finish. |
 | `swift-backtrace` | path | auto-detected | Override the implicit search and use the given absolute path directly. Required for statically linked binaries in minimal containers, where the implicit search can't reliably find the helper. |
 | `warnings` | `enabled`, `suppressed` | `enabled` | Diagnostic messages from the backtracer itself. |
 | `close-fds` | `yes`, `no` | `no` | Close all open file descriptors in the crashing process before gathering the trace, useful in CI environments where leaked file descriptors cause resource contention. |
@@ -184,7 +183,7 @@ The following fields appear conditionally, depending on backtracer settings:
 
 | Field | Value |
 |---|---|
-| `omittedThreads` | Count of threads omitted when `threads=crashed`. Omitted if zero. |
+| `omittedThreads` | Count of threads omitted when `threads=crashed`; omitted if zero. |
 | `capturedMemory` | Dictionary of captured memory contents, keyed by hex address strings. Absent when `sanitize` is enabled or no data was captured. |
 | `omittedImages` | When `images=mentioned`, count of images whose details were omitted. |
 | `images` | Array of image records (unless `images=none`). |
@@ -238,7 +237,7 @@ Symbolicated frames can add `inlined`, `runtimeFailure`, `thunk`, or
 The following report comes from a small service whose `MyService.run()` calls
 into a synchronous closure that invokes `MyService.handleRequest`, which
 dereferences a NULL-adjacent pointer.
-The binary was built with debug information and run on Linux arm64 with
+The binary for this example was built with debug information and run on Linux arm64 with
 default backtracer settings (`format=json`, preset `auto`, `demangle=yes`,
 `symbolicate=full`).
 To keep this example concise, the `registers` and `capturedMemory` objects show only a
@@ -384,7 +383,7 @@ general-purpose register and many more captured memory snapshots.
 }
 ```
 
-A few things to notice in this trace:
+A few things to note in this trace:
 
 - The async boundary in this program sits between `Main.main()` and
   `MyService.run()` — that's where the `asyncResumePoint` frames begin.
@@ -392,7 +391,7 @@ A few things to notice in this trace:
   of the crash it was running on a regular stack inside the synchronous
   closure it dispatched.
 - The frames marked `system: true` (`Main.$main()` and
-  `completeTaskWithClosure`) come from compiler-generated entry-point glue
+  `completeTaskWithClosure`) come from compiler-generated entry-point
   and the Swift concurrency runtime. They don't usually have a meaningful
   source location, so the backtracer reports `<compiler-generated>`.
 - The frame marked `thunk: true` is a compiler-generated bridge that adapts

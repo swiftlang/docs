@@ -5,9 +5,8 @@ Interpret a Swift service's crash trace to find the failing code on Linux.
 ## Overview
 
 When your Swift service crashes on Linux, the runtime spawns a helper process,
-`swift-backtrace`, that prints a stack trace describing what was running and where it failed.
-This article assumes you already have a trace from a crash.
-It covers how to persist the trace from a container, read its structure,
+`swift-backtrace`, that prints a stack trace that describes what was running and where it failed.
+This article covers how to persist a trace from a container, read its structure,
 map frames back to your source, recognize common crash patterns, and reproduce the crash locally.
 
 For the configuration options the trace responds to, see <doc:swift-backtrace-configuration>.
@@ -17,20 +16,18 @@ see <doc:packaging#Include-the-backtracer-in-the-runtime-image>.
 ### Persist backtraces from a container
 
 When a container exits, its filesystem is gone,
-so a crash that writes to a file inside the container loses the trace
-on the next restart.
-For durable, addressable crash files, write to a mounted volume:
+so a crash that writes to a file inside the container loses the trace.
+For durable, addressable crash files, write the trace to a volume that you mount when you run the container. For example, if you mounted a volume at `/var/crash-logs`, use the configuration:
 
 ```Dockerfile
 ENV SWIFT_BACKTRACE=enable=yes,interactive=no,symbolicate=off,output-to=/var/crash-logs/
 ```
 
-Mount a volume at `/var/crash-logs` when you run the container.
-With `docker run`, use `-v`; with Kubernetes, mount a `PersistentVolume`
-or an `emptyDir`-backed volume at that path.
+With `docker run` or Apple container, use the `-v` option to mount a volume;
+with Kubernetes, mount a `PersistentVolume` or an `emptyDir`-backed volume at that path.
 
 When `output-to` resolves to a directory, the backtracer writes each crash
-to a uniquely named file inside it, so a burst of crashes doesn't overwrite
+to a uniquely named file inside it, so a burst of crashes won't overwrite
 earlier traces.
 The `symbolicate=off` setting keeps crash handling fast in production;
 see <doc:debugging-a-service-using-a-backtrace#Map-a-frame-to-source> for how to resolve symbols afterward.
@@ -60,13 +57,20 @@ Thread 0 "myservice" crashed:
 
 The header line names the **signal** and the **fault address**.
 On Linux the common signals are `SIGSEGV` (bad memory access),
-`SIGABRT` (abort, including Swift's runtime traps and `fatalError`),
-`SIGBUS` (misaligned access), `SIGFPE` (arithmetic exception), and `SIGILL` (illegal instruction).
+`SIGILL` and `SIGTRAP` (Swift runtime traps — see the table below),
+`SIGABRT` (a deliberate abort, raised by `abort()` and by force-cast (`as!`) failures),
+`SIGBUS` (misaligned access or access past the end of a memory-mapped file),
+and `SIGFPE` (arithmetic exception, including integer division by zero).
+
+Swift runtime traps (force-unwrap of `nil`, index-out-of-range, `try!` on a throwing call,
+arithmetic overflow, `precondition`, `fatalError`) lower to a CPU trap instruction.
+The kernel reports this as `SIGILL` on x86_64 (where the trap lowers to `ud2`)
+and as `SIGTRAP` on aarch64 (where it lowers to `brk #1`).
 
 The **thread line** identifies which thread crashed.
-The backtracer captures only the crashed thread by default;
-to see every thread, which helps when diagnosing deadlocks,
-use `SWIFT_BACKTRACE=threads=all` — see <doc:swift-backtrace-configuration#Captured-content>.
+The backtracer captures only the crashed thread by default.
+Use `SWIFT_BACKTRACE=threads=all` to see every thread which helps when diagnosing deadlocks.
+For more information, see <doc:swift-backtrace-configuration#Captured-content>.
 
 Each **frame line** has the form:
 
@@ -86,11 +90,12 @@ You can tune or suppress both; see <doc:swift-backtrace-configuration#Captured-c
 
 Symbolication — turning addresses into function names, files, and lines — has a real cost.
 The default, `symbolicate=full`, walks DWARF for every captured frame,
-which can extend crash-handling time noticeably on a large binary.
-The established pattern for production services is to capture lightweight traces at crash time
+which extends crash-handling time noticeably on a large binary.
+Production services typically capture lightweight traces at crash time
 and resolve symbols offline.
 
 **At crash time, in production.**
+
 Build production binaries with debug info stripped and run with `SWIFT_BACKTRACE=symbolicate=off`.
 Each captured frame has its address and the image (binary or shared library) it belongs to —
 enough to resolve to source later.
@@ -98,7 +103,8 @@ See <doc:swift-backtrace-configuration#Unwinding-and-symbolication> for the full
 and the trade-offs between `off`, `fast`, and `full`.
 
 **Post-mortem, on a developer or build machine.**
-Keep the unstripped binary, or a separate DWARF debug-info package, from the same build that produced the trace.
+
+Keep the unstripped binary, or a separate DWARF debug-info package, that came from the same build as the trace.
 With that artifact in hand:
 
 ```bash
@@ -109,19 +115,15 @@ llvm-symbolizer --obj=path/to/unstripped/myservice 0x000055a9c4001234
 swift demangle "$1MyService13handleRequestyAA8ResponseVAA7RequestVF"
 ```
 
-Time isn't critical at this stage, so spending CPU on full demangling and inline-frame resolution is fine.
-Tools like `addr2line` work as well; pick whichever your build environment already has.
+**With a separate debug-info file.**
 
-#### Resolve symbols from a separate debug-info file
-
-You can ship debug information as a sidecar file rather than embedding it in the binary
+Ship debug information as a sidecar file rather than embedding it in the binary
 (see <doc:building#Split-debug-information-into-a-sidecar-file>).
-Place the sidecar where symbolicators look for it.
-Symbolicators look first at the path recorded by `objcopy --add-gnu-debuglink`
-(resolved relative to the binary, then under `/usr/lib/debug/<binary-dir>/`),
-and then at the build-ID index at `/usr/lib/debug/.build-id/<first-2-hex>/<remaining-hex>.debug`,
+Place the sidecar where symbolicators look for it: first at the path that
+`objcopy --add-gnu-debuglink` records (resolved relative to the binary,
+then under `/usr/lib/debug/<binary-dir>/`),
+then at the build-ID index at `/usr/lib/debug/.build-id/<first-2-hex>/<remaining-hex>.debug`,
 where the hex digits come from the binary's build ID.
-
 The `-debuginfo` and `-dbgsym` packages populate the build-ID index when you install them,
 so a developer machine with the matching debug-info package installed resolves symbols transparently:
 
@@ -137,9 +139,11 @@ llvm-symbolizer --obj=/usr/bin/MyServer 0x000055a9c4001234
 ```
 
 `llvm-symbolizer` reads the build ID from the stripped binary, finds the matching sidecar on the index path, and pulls source locations from its DWARF.
+If the build IDs don't match, the symbolicator falls back to address-only output;
+confirm the pairing with `readelf -n` against both files (see <doc:building#Verify-build-IDs-match>).
 
-If the build IDs don't match, the symbolicator falls back to address-only output.
-Confirm the pairing with `readelf -n` against both files; see <doc:building#Verify-build-IDs-match>.
+Time isn't critical at this stage, so spending CPU on full demangling and inline-frame resolution is fine.
+Tools like `addr2line` from Linux binutils work as well; pick whichever your build environment already has.
 
 ### Recognize the crash pattern
 
@@ -148,17 +152,18 @@ to identify the kind of bug.
 
 | Signal and message | Typical cause |
 |---|---|
-| `SIGABRT` + `Fatal error: Index out of range` | Out-of-bounds collection access |
-| `SIGABRT` + `Fatal error: Unexpectedly found nil while unwrapping an Optional value` | Force-unwrap (`!`) of a `nil` optional |
-| `SIGABRT` + `Fatal error: 'try!' expression unexpectedly raised an error` | `try!` on a call that threw |
+| **trap** + `Fatal error: Index out of range` | Out-of-bounds collection access |
+| **trap** + `Fatal error: Unexpectedly found nil while unwrapping an Optional value` | Force-unwrap (`!`) of a `nil` optional |
+| **trap** + `Fatal error: 'try!' expression unexpectedly raised an error` | `try!` on a call that threw |
+| **trap** + `Fatal error: Arithmetic operation ... overflow` | Trapping integer arithmetic |
+| **trap** + `Precondition failed: <message>` or `Fatal error: <message>` | `precondition()` or `fatalError()` call |
 | `SIGABRT` + `Could not cast value of type ...` | Force-cast (`as!`) failure |
-| `SIGABRT` + `Fatal error: Arithmetic operation ... overflow` | Trapping integer arithmetic |
-| `SIGABRT` + `precondition failed` or a custom message | `precondition()` or `fatalError()` call |
+| `SIGABRT` | Direct `abort()` call from Swift or a C dependency |
 | `SIGSEGV` with frames in your unsafe-pointer or C-interop code | Memory-safety violation in that code |
 | `SIGSEGV` with frames only in libc or runtime | Likely heap corruption from earlier code |
 | `SIGSEGV` with a deeply uniform recursive frame pattern | Stack overflow |
 
-For runtime-trap crashes (the `SIGABRT` rows in the previous table), the relevant fix is almost always
+For runtime-trap crashes (the **trap** rows in the previous table), the relevant fix is almost always
 in the topmost frame of *your* code in the trace —
 the standard library trap is a few frames up from there.
 For `SIGSEGV` in unsafe code or dependencies, the topmost frame names the call that touched bad memory,

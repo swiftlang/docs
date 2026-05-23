@@ -120,10 +120,10 @@ container build -t <my-app>:latest .
 > If you need a shell for troubleshooting,
 > use a slim base image during development and switch to `scratch` for production.
 
-### Include the backtracer for crash diagnostics
+### Include swift-backtrace for crash diagnostics
 
 A static binary in a `scratch` container has no toolchain layout for the runtime to fall back on.
-As a result, the runtime's default path to `swift-backtrace` doesn't exist in the image.
+As a result, the runtime's default path to find `swift-backtrace` doesn't exist in the image.
 To get backtraces from crashes, copy the static helper from a Swift container image
 into your final image and explicitly pass its path to the runtime:
 
