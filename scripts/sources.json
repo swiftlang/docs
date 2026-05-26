@@ -17,18 +17,6 @@
       "docc_catalog": "Guide.docc"
     },
     {
-      "id": "api-guidelines",
-      "type": "local",
-      "path": "api-guidelines",
-      "targets": ["APIGuidelines"]
-    },
-    {
-      "id": "language-guides",
-      "type": "local",
-      "path": "language-guides",
-      "targets": ["LanguageGuides"]
-    },
-    {
       "id": "compiler-diagnostics",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift.git",
@@ -111,6 +99,13 @@
       "repo": "https://github.com/swiftlang/swiftly.git",
       "ref": "main",
       "targets": ["SwiftlyDocs"]
+    },
+    {
+      "id": "swift-stdlib",
+      "type": "archive",
+      "url": "https://ci.swift.org/job/build-stdlib-docs/36/artifact/*zip*/archive.zip",
+      "format": "zip",
+      "docc_archive_name": "Swift.doccarchive"
     }
   ]
 }

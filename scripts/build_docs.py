@@ -23,6 +23,7 @@ import sys
 import tarfile
 import urllib.error
 import urllib.request
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -164,10 +165,10 @@ def validate_sources(config):
                     f"(got '{docc_archive_name}')"
                 )
             archive_format = entry.get("format", "tar.gz")
-            if archive_format != "tar.gz":
+            if archive_format not in ("tar.gz", "zip"):
                 errors.append(
                     f"{label} has unsupported 'format' '{archive_format}' "
-                    "(only 'tar.gz' is supported)"
+                    "(supported: 'tar.gz', 'zip')"
                 )
             disallowed_for_archive = (
                 "targets", "docc_catalog", "path", "repo", "ref",
@@ -269,13 +270,14 @@ def fetch_archive(source, workspace):
     source_id = source["id"]
     url = source["url"]
     docc_archive_name = source["docc_archive_name"]
+    archive_format = source.get("format", "tar.gz")
 
     download_dir = workspace / "_downloads" / source_id
     if download_dir.exists():
         shutil.rmtree(str(download_dir))
     download_dir.mkdir(parents=True)
 
-    filename = Path(url).name or f"{source_id}.tar.gz"
+    filename = Path(url).name or f"{source_id}.{archive_format}"
     download_path = download_dir / filename
     extract_dir = download_dir / "extracted"
     extract_dir.mkdir()
@@ -290,9 +292,13 @@ def fetch_archive(source, workspace):
 
     print(f"Extracting to {extract_dir}...")
     try:
-        with tarfile.open(str(download_path), "r:gz") as tar:
-            tar.extractall(path=str(extract_dir), filter="data")
-    except (tarfile.TarError, OSError, ValueError) as e:
+        if archive_format == "zip":
+            with zipfile.ZipFile(str(download_path)) as zf:
+                zf.extractall(path=str(extract_dir))
+        else:
+            with tarfile.open(str(download_path), "r:gz") as tar:
+                tar.extractall(path=str(extract_dir), filter="data")
+    except (tarfile.TarError, zipfile.BadZipFile, OSError, ValueError) as e:
         raise ArchiveFetchError(
             f"failed to extract archive for '{source_id}': {e}"
         ) from e
