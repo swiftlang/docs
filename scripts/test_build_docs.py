@@ -14,12 +14,10 @@
 ##===----------------------------------------------------------------------===##
 """Tests for build_docs.py.
 
-Run from the scripts/ directory (or repo root) with:
+Run from the scripts/ directory (or repository root) with:
     python3 -m unittest scripts/test_build_docs.py
 """
 
-import contextlib
-import io
 import json
 import subprocess
 import sys
@@ -36,15 +34,13 @@ import strip_availability  # noqa: E402
 
 
 def _validate(config):
-    """Call validate_sources with stdout suppressed. Returns None on success,
-    or the captured stdout text on SystemExit."""
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        try:
-            build_docs.validate_sources(config)
-        except SystemExit:
-            return buf.getvalue()
-    return None
+    """Run validate_sources and return joined error text, or None if valid.
+
+    Joining preserves the assertion shape used by existing tests
+    (assertIn("url", output)) without needing per-error matching.
+    """
+    errors = build_docs.validate_sources(config)
+    return "\n".join(errors) if errors else None
 
 
 def _wrap(entry):
@@ -642,43 +638,56 @@ class TransformStaticHosting(unittest.TestCase):
                 build_docs.transform_static_hosting(archive, "main", [])
 
 
-class FindSwiftly(unittest.TestCase):
-    def test_returns_command_when_on_path(self):
-        with mock.patch.object(build_docs.shutil, "which", return_value="/usr/local/bin/swiftly"):
-            self.assertEqual(build_docs.find_swiftly(), ["swiftly"])
+class DiscoverTools(unittest.TestCase):
+    def test_swiftly_present_routes_everything_through_swiftly(self):
+        with mock.patch.object(build_docs.shutil, "which") as which:
+            which.side_effect = lambda name: f"/fake/{name}" if name == "swiftly" else None
+            tools = build_docs.discover_tools()
+        self.assertEqual(tools.swiftly, ["swiftly"])
+        self.assertEqual(tools.swift, ["swiftly", "run", "swift"])
+        self.assertEqual(tools.docc, ["swiftly", "run", "docc"])
 
-    def test_returns_empty_when_absent(self):
+    def test_no_swiftly_uses_direct_swift(self):
+        present = {"swift": "/usr/bin/swift"}
+        with mock.patch.object(build_docs.shutil, "which", side_effect=present.get):
+            tools = build_docs.discover_tools()
+        self.assertEqual(tools.swiftly, [])
+        self.assertEqual(tools.swift, ["swift"])
+        self.assertEqual(tools.docc, [])
+
+    def test_xcrun_finds_docc_when_no_swiftly(self):
+        present = {"swift": "/usr/bin/swift", "xcrun": "/usr/bin/xcrun"}
+
+        def fake_run(cmd, **kw):
+            self.assertEqual(cmd[:2], ["xcrun", "--find"])
+            return subprocess.CompletedProcess(cmd, 0, stdout="/path/docc\n", stderr="")
+
+        with mock.patch.object(build_docs.shutil, "which", side_effect=present.get):
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                tools = build_docs.discover_tools()
+        self.assertEqual(tools.docc, ["xcrun", "docc"])
+
+    def test_falls_back_to_path_docc_when_xcrun_fails(self):
+        present = {
+            "swift": "/usr/bin/swift",
+            "xcrun": "/usr/bin/xcrun",
+            "docc": "/usr/local/bin/docc",
+        }
+
+        def fake_run(cmd, **kw):
+            raise subprocess.CalledProcessError(1, cmd)
+
+        with mock.patch.object(build_docs.shutil, "which", side_effect=present.get):
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                tools = build_docs.discover_tools()
+        self.assertEqual(tools.docc, ["docc"])
+
+    def test_nothing_found_returns_empty_lists(self):
         with mock.patch.object(build_docs.shutil, "which", return_value=None):
-            self.assertEqual(build_docs.find_swiftly(), [])
-
-
-class FindSwiftCommand(unittest.TestCase):
-    def test_prefers_swiftly_when_available(self):
-        def fake_which(name):
-            return f"/fake/{name}" if name == "swiftly" else None
-        with mock.patch.object(build_docs.shutil, "which", side_effect=fake_which):
-            self.assertEqual(build_docs.find_swift_command(), ["swiftly", "run", "swift"])
-
-    def test_falls_back_to_direct_swift(self):
-        def fake_which(name):
-            return "/usr/bin/swift" if name == "swift" else None
-        with mock.patch.object(build_docs.shutil, "which", side_effect=fake_which):
-            self.assertEqual(build_docs.find_swift_command(), ["swift"])
-
-    def test_returns_empty_when_neither_present(self):
-        with mock.patch.object(build_docs.shutil, "which", return_value=None):
-            self.assertEqual(build_docs.find_swift_command(), [])
-
-
-class FindDoccCommandPrefersSwiftly(unittest.TestCase):
-    def test_prefers_swiftly_when_available(self):
-        def fake_which(name):
-            return f"/fake/{name}" if name == "swiftly" else None
-        with mock.patch.object(build_docs.shutil, "which", side_effect=fake_which):
-            self.assertEqual(
-                build_docs.find_docc_command(),
-                ["swiftly", "run", "docc"],
-            )
+            tools = build_docs.discover_tools()
+        self.assertEqual(tools.swiftly, [])
+        self.assertEqual(tools.swift, [])
+        self.assertEqual(tools.docc, [])
 
 
 class EnsureToolchainInstalled(unittest.TestCase):
@@ -731,6 +740,203 @@ class EnsureToolchainInstalled(unittest.TestCase):
             self.assertEqual(calls, [])
 
 
+class GetActiveSwiftVersion(unittest.TestCase):
+    def test_parses_apple_swift_format(self):
+        stdout = (
+            "Apple Swift version 6.1.2 (swiftlang-6.1.2.0.55 "
+            "clang-1700.0.13.5)\n"
+            "Target: arm64-apple-macosx15.0\n"
+        )
+        result = subprocess.CompletedProcess([], 0, stdout=stdout, stderr="")
+        with mock.patch.object(build_docs.shutil, "which", return_value="/usr/bin/swift"):
+            with mock.patch.object(build_docs.subprocess, "run", return_value=result):
+                self.assertEqual(build_docs.get_active_swift_version(), (6, 1))
+
+    def test_parses_oss_swift_format(self):
+        stdout = (
+            "Swift version 5.10 (swift-5.10-RELEASE)\n"
+            "Target: x86_64-unknown-linux-gnu\n"
+        )
+        result = subprocess.CompletedProcess([], 0, stdout=stdout, stderr="")
+        with mock.patch.object(build_docs.shutil, "which", return_value="/usr/bin/swift"):
+            with mock.patch.object(build_docs.subprocess, "run", return_value=result):
+                self.assertEqual(build_docs.get_active_swift_version(), (5, 10))
+
+    def test_returns_none_when_swift_missing(self):
+        with mock.patch.object(build_docs.shutil, "which", return_value=None):
+            self.assertIsNone(build_docs.get_active_swift_version())
+
+    def test_returns_none_when_output_unparseable(self):
+        result = subprocess.CompletedProcess([], 0, stdout="garbage\n", stderr="")
+        with mock.patch.object(build_docs.shutil, "which", return_value="/usr/bin/swift"):
+            with mock.patch.object(build_docs.subprocess, "run", return_value=result):
+                self.assertIsNone(build_docs.get_active_swift_version())
+
+    def test_returns_none_when_swift_invocation_fails(self):
+        def fake_run(*a, **kw):
+            raise subprocess.CalledProcessError(1, a[0])
+
+        with mock.patch.object(build_docs.shutil, "which", return_value="/usr/bin/swift"):
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                self.assertIsNone(build_docs.get_active_swift_version())
+
+
+class SelectSwiftToolchain(unittest.TestCase):
+    def _write_package(self, dir_, tools_version):
+        (Path(dir_) / "Package.swift").write_text(
+            f"// swift-tools-version: {tools_version}\nimport PackageDescription\n"
+        )
+
+    def test_no_swiftly_returns_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_package(tmp, "6.3")
+            calls = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                result = build_docs.select_swift_toolchain(
+                    ["swift"], Path(tmp), [], active_swift_version=(5, 0)
+                )
+            self.assertEqual(result, ["swift"])
+            self.assertEqual(calls, [])
+
+    def test_swift_version_file_returns_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_package(tmp, "6.3")
+            (Path(tmp) / ".swift-version").write_text("6.3\n")
+            calls = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                result = build_docs.select_swift_toolchain(
+                    ["swiftly", "run", "swift"],
+                    Path(tmp),
+                    ["swiftly"],
+                    active_swift_version=(5, 0),
+                )
+            self.assertEqual(result, ["swiftly", "run", "swift"])
+            self.assertEqual(calls, [])
+
+    def test_no_tools_version_returns_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                result = build_docs.select_swift_toolchain(
+                    ["swiftly", "run", "swift"],
+                    Path(tmp),
+                    ["swiftly"],
+                    active_swift_version=(6, 1),
+                )
+            self.assertEqual(result, ["swiftly", "run", "swift"])
+            self.assertEqual(calls, [])
+
+    def test_active_equal_to_required_returns_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_package(tmp, "6.1")
+            calls = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                result = build_docs.select_swift_toolchain(
+                    ["swiftly", "run", "swift"],
+                    Path(tmp),
+                    ["swiftly"],
+                    active_swift_version=(6, 1),
+                )
+            self.assertEqual(result, ["swiftly", "run", "swift"])
+            self.assertEqual(calls, [])
+
+    def test_active_newer_than_required_returns_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_package(tmp, "5.10")
+            calls = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                result = build_docs.select_swift_toolchain(
+                    ["swiftly", "run", "swift"],
+                    Path(tmp),
+                    ["swiftly"],
+                    active_swift_version=(6, 1),
+                )
+            self.assertEqual(result, ["swiftly", "run", "swift"])
+            self.assertEqual(calls, [])
+
+    def test_active_older_installs_and_pins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_package(tmp, "6.3")
+            calls = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                result = build_docs.select_swift_toolchain(
+                    ["swiftly", "run", "swift"],
+                    Path(tmp),
+                    ["swiftly"],
+                    active_swift_version=(6, 1),
+                )
+            self.assertEqual(result, ["swiftly", "run", "swift", "+6.3"])
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][:3], ["swiftly", "install", "6.3"])
+            self.assertIn("--assume-yes", calls[0])
+
+    def test_active_unknown_installs_and_pins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_package(tmp, "6.3")
+            calls = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                result = build_docs.select_swift_toolchain(
+                    ["swiftly", "run", "swift"],
+                    Path(tmp),
+                    ["swiftly"],
+                    active_swift_version=None,
+                )
+            self.assertEqual(result, ["swiftly", "run", "swift", "+6.3"])
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][:3], ["swiftly", "install", "6.3"])
+
+    def test_install_failure_returns_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_package(tmp, "6.3")
+
+            def fake_run(cmd, **kw):
+                raise subprocess.CalledProcessError(1, cmd)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                result = build_docs.select_swift_toolchain(
+                    ["swiftly", "run", "swift"],
+                    Path(tmp),
+                    ["swiftly"],
+                    active_swift_version=(6, 1),
+                )
+            self.assertEqual(result, ["swiftly", "run", "swift"])
+
+
 class ReadSwiftToolsVersion(unittest.TestCase):
     def _write_package(self, dir_, first_line):
         pkg = Path(dir_) / "Package.swift"
@@ -770,6 +976,153 @@ class ReadSwiftToolsVersion(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "Package.swift").write_text("")
             self.assertIsNone(build_docs.read_swift_tools_version(Path(tmp)))
+
+
+class CollectGitMetadata(unittest.TestCase):
+    def test_configured_ref_returned_verbatim_with_commit(self):
+        def fake_run(cmd, **kw):
+            self.assertIn("rev-parse", cmd)
+            self.assertIn("HEAD", cmd)
+            self.assertNotIn("--abbrev-ref", cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
+
+        with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+            ref, commit = build_docs._collect_git_metadata(
+                Path("/tmp/x"), configured_ref="release/6.1"
+            )
+        self.assertEqual(ref, "release/6.1")
+        self.assertEqual(commit, "abc123")
+
+    def test_configured_ref_kept_when_git_fails(self):
+        def fake_run(cmd, **kw):
+            raise subprocess.CalledProcessError(1, cmd)
+
+        with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+            ref, commit = build_docs._collect_git_metadata(
+                Path("/tmp/x"), configured_ref="main"
+            )
+        self.assertEqual(ref, "main")
+        self.assertEqual(commit, "unknown")
+
+    def test_no_configured_ref_reads_both_from_git(self):
+        outputs = iter([
+            subprocess.CompletedProcess([], 0, stdout="feature-x\n", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout="def456\n", stderr=""),
+        ])
+
+        def fake_run(cmd, **kw):
+            return next(outputs)
+
+        with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+            ref, commit = build_docs._collect_git_metadata(Path("/tmp/x"))
+        self.assertEqual(ref, "feature-x")
+        self.assertEqual(commit, "def456")
+
+    def test_no_configured_ref_returns_unknown_on_git_failure(self):
+        def fake_run(cmd, **kw):
+            raise subprocess.CalledProcessError(1, cmd)
+
+        with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+            ref, commit = build_docs._collect_git_metadata(Path("/tmp/x"))
+        self.assertEqual(ref, "unknown")
+        self.assertEqual(commit, "unknown")
+
+
+class FinalizeCombinedArchive(unittest.TestCase):
+    def test_prior_failures_skip_merge(self):
+        succeeded, failed = build_docs._finalize_combined_archive(
+            [], Path("/tmp"), "main", ["docc"], prior_failed=["foo", "bar"]
+        )
+        self.assertEqual(succeeded, [])
+        self.assertEqual(failed, ["combined-merge"])
+
+    def test_missing_docc_skips_merge(self):
+        succeeded, failed = build_docs._finalize_combined_archive(
+            [], Path("/tmp"), "main", [], prior_failed=[]
+        )
+        self.assertEqual(succeeded, [])
+        self.assertEqual(failed, ["combined-merge"])
+
+    def test_missing_archive_dir_skips_merge(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            ghost = tmp_path / "doesnotexist.doccarchive"
+            succeeded, failed = build_docs._finalize_combined_archive(
+                [ghost], tmp_path, "main", ["docc"], prior_failed=[]
+            )
+        self.assertEqual(succeeded, [])
+        self.assertEqual(failed, ["combined-merge"])
+
+    def test_merge_failure_records_combined_merge_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+
+            def fake_run(cmd, **kw):
+                raise subprocess.CalledProcessError(1, cmd)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                succeeded, failed = build_docs._finalize_combined_archive(
+                    [archive], tmp_path, "main", ["docc"], prior_failed=[]
+                )
+        self.assertEqual(succeeded, [])
+        self.assertEqual(failed, ["combined-merge"])
+
+    def test_transform_failure_records_only_transform(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+            (archive / "index.html").write_text("ok")
+
+            calls = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                # First call is `docc merge`; succeed by creating output dir.
+                if "merge" in cmd:
+                    out_idx = cmd.index("--output-path") + 1
+                    Path(cmd[out_idx]).mkdir(parents=True, exist_ok=True)
+                    return subprocess.CompletedProcess(cmd, 0)
+                # Second call is the transform; fail.
+                raise subprocess.CalledProcessError(1, cmd)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                succeeded, failed = build_docs._finalize_combined_archive(
+                    [archive], tmp_path, "main", ["docc"], prior_failed=[]
+                )
+        self.assertEqual(succeeded, ["combined-merge"])
+        self.assertEqual(failed, ["static-hosting-transform"])
+
+    def test_full_success_records_both_steps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+            (archive / "index.html").write_text("ok")
+
+            def fake_run(cmd, **kw):
+                if "merge" in cmd:
+                    out_idx = cmd.index("--output-path") + 1
+                    out = Path(cmd[out_idx])
+                    out.mkdir(parents=True, exist_ok=True)
+                    (out / "index.html").write_text("merged")
+                    return subprocess.CompletedProcess(cmd, 0)
+                # Transform step: simulate docc producing the transformed
+                # archive at --output-path.
+                out_idx = cmd.index("--output-path") + 1
+                out = Path(cmd[out_idx])
+                out.mkdir(parents=True, exist_ok=True)
+                (out / "index.html").write_text("transformed")
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                succeeded, failed = build_docs._finalize_combined_archive(
+                    [archive], tmp_path, "main", ["docc"], prior_failed=[]
+                )
+        self.assertEqual(succeeded, ["combined-merge", "static-hosting-transform"])
+        self.assertEqual(failed, [])
 
 
 if __name__ == "__main__":
