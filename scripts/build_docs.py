@@ -267,7 +267,7 @@ def validate_sources(config):
 
     Pure check — does not print or exit. The caller decides how to surface
     errors. Returns early after structural problems (missing top-level keys,
-    `sources` not a list) so per-entry validation only runs against a sane
+    `sources` not a list) so per-entry validation only runs against a validated
     shape.
     """
     errors = []
