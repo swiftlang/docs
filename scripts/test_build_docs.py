@@ -1125,5 +1125,90 @@ class FinalizeCombinedArchive(unittest.TestCase):
         self.assertEqual(failed, [])
 
 
+class CleanPackageBuildDirs(unittest.TestCase):
+    def test_removes_build_dir_for_local_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pkg = root / "server-guides"
+            pkg.mkdir()
+            (pkg / "Package.swift").write_text("// swift-tools-version:6.0\n")
+            (pkg / ".build").mkdir()
+            (pkg / ".build" / "stale.txt").write_text("x")
+
+            sources = [
+                {"id": "server-guides", "type": "local", "path": "server-guides"}
+            ]
+            removed = build_docs.clean_package_build_dirs(root, sources)
+
+            self.assertFalse((pkg / ".build").exists())
+            self.assertEqual(len(removed), 1)
+            self.assertEqual(removed[0], (pkg / ".build").resolve())
+
+    def test_removes_build_dirs_for_repo_root_packages_not_in_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ["api-guidelines", "language-guides"]:
+                pkg = root / name
+                pkg.mkdir()
+                (pkg / "Package.swift").write_text("// swift-tools-version:6.0\n")
+                (pkg / ".build").mkdir()
+            removed = build_docs.clean_package_build_dirs(root, sources=[])
+            self.assertEqual(len(removed), 2)
+            for name in ["api-guidelines", "language-guides"]:
+                self.assertFalse((root / name / ".build").exists())
+
+    def test_dedupes_when_local_source_is_also_repo_root_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pkg = root / "server-guides"
+            pkg.mkdir()
+            (pkg / "Package.swift").write_text("// swift-tools-version:6.0\n")
+            (pkg / ".build").mkdir()
+
+            sources = [
+                {"id": "server-guides", "type": "local", "path": "server-guides"}
+            ]
+            removed = build_docs.clean_package_build_dirs(root, sources)
+            self.assertEqual(len(removed), 1)
+
+    def test_skips_directories_without_build(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pkg = root / "api-guidelines"
+            pkg.mkdir()
+            (pkg / "Package.swift").write_text("// swift-tools-version:6.0\n")
+            removed = build_docs.clean_package_build_dirs(root, sources=[])
+            self.assertEqual(removed, [])
+
+    def test_ignores_non_package_subdirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common = root / "common"
+            common.mkdir()
+            (common / ".build").mkdir()  # no Package.swift — must not be removed
+            removed = build_docs.clean_package_build_dirs(root, sources=[])
+            self.assertEqual(removed, [])
+            self.assertTrue((common / ".build").exists())
+
+    def test_ignores_non_local_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sources = [
+                {
+                    "id": "x",
+                    "type": "git",
+                    "repo": "https://example.com/x.git",
+                    "ref": "main",
+                },
+                {
+                    "id": "y",
+                    "type": "archive",
+                    "url": "https://example.com/y.tar.gz",
+                },
+            ]
+            removed = build_docs.clean_package_build_dirs(root, sources)
+            self.assertEqual(removed, [])
+
+
 if __name__ == "__main__":
     unittest.main()

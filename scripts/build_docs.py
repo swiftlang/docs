@@ -376,6 +376,31 @@ def validate_sources(config):
     return errors
 
 
+def clean_package_build_dirs(root_dir, sources):
+    """Remove `.build/` dirs for every local Swift package this script touches.
+
+    Targets the union of: `local`-typed sources in `sources.json` (their
+    `path` resolved under `root_dir`) and any sibling of `root_dir` that
+    contains a `Package.swift`. Existence of `Package.swift` gates the
+    repo-root sweep so unrelated subdirectories like `common/` are left alone.
+    Returns the list of removed `.build/` paths in deterministic order.
+    """
+    targets = set()
+    for s in sources:
+        if s.get("type") == "local" and s.get("path"):
+            targets.add((root_dir / s["path"]).resolve())
+    for pkg_manifest in root_dir.glob("*/Package.swift"):
+        targets.add(pkg_manifest.parent.resolve())
+
+    removed = []
+    for pkg_dir in sorted(targets):
+        build_dir = pkg_dir / ".build"
+        if build_dir.exists():
+            shutil.rmtree(str(build_dir))
+            removed.append(build_dir)
+    return removed
+
+
 def clone_or_update(source, workspace, ref):
     """Git clone or fetch+checkout for a given ref. Returns the source directory."""
     source_id = source["id"]
@@ -926,6 +951,8 @@ def main():
         print(f"Removing workspace: {workspace}")
         if workspace.exists():
             shutil.rmtree(str(workspace))
+        for build_dir in clean_package_build_dirs(root_dir, sources):
+            print(f"Removed package build dir: {build_dir}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     workspace.mkdir(parents=True, exist_ok=True)
