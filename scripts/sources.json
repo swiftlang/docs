@@ -10,6 +10,13 @@
       "preflight": "bin/generate-grammar"
     },
     {
+      "id": "swift-stdlib",
+      "type": "archive",
+      "url": "https://ci.swift.org/job/build-stdlib-docs/36/artifact/*zip*/archive.zip",
+      "format": "zip",
+      "docc_archive_name": "Swift.doccarchive"
+    },
+    {
       "id": "swift-migration-guide",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-migration-guide.git",
@@ -23,12 +30,6 @@
       "ref": "main",
       "docc_catalog": "userdocs/diagnostics",
       "extra_flags": ["--allow-arbitrary-catalog-directories"]
-    },
-    {
-      "id": "ecosystem-tools",
-      "type": "local",
-      "path": "ecosystem-tools",
-      "targets": ["EcosystemTools"]
     },
     {
       "id": "swiftpm",
@@ -99,13 +100,6 @@
       "repo": "https://github.com/swiftlang/swiftly.git",
       "ref": "main",
       "targets": ["SwiftlyDocs"]
-    },
-    {
-      "id": "swift-stdlib",
-      "type": "archive",
-      "url": "https://ci.swift.org/job/build-stdlib-docs/36/artifact/*zip*/archive.zip",
-      "format": "zip",
-      "docc_archive_name": "Swift.doccarchive"
     }
   ]
 }
