@@ -17,6 +17,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,8 @@ import urllib.request
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+from strip_availability import strip_archive
 
 
 class ArchiveFetchError(Exception):
@@ -84,11 +87,15 @@ def check_prerequisites():
 
 
 def find_docc_command():
-    """Find the docc tool — prefer xcrun on macOS, fall back to PATH.
+    """Find the docc tool — prefer swiftly proxy, then xcrun on macOS, then PATH.
 
-    Returns a list of command components (e.g. ["xcrun", "docc"] or ["docc"]),
-    or an empty list if docc is not found.
+    Routing through swiftly when available ensures the docc invocation honors
+    any `.swift-version` file in the working directory.
+    Returns a list of command components (e.g. ["swiftly", "run", "docc"]
+    or ["xcrun", "docc"] or ["docc"]), or an empty list if docc is not found.
     """
+    if shutil.which("swiftly"):
+        return ["swiftly", "run", "docc"]
     if shutil.which("xcrun"):
         try:
             subprocess.run(
@@ -102,6 +109,74 @@ def find_docc_command():
     if shutil.which("docc"):
         return ["docc"]
     return []
+
+
+def find_swiftly():
+    """Return ['swiftly'] if swiftly is on PATH, else []."""
+    if shutil.which("swiftly"):
+        return ["swiftly"]
+    return []
+
+
+def find_swift_command():
+    """Find swift — prefer swiftly proxy so .swift-version files are honored."""
+    if shutil.which("swiftly"):
+        return ["swiftly", "run", "swift"]
+    if shutil.which("swift"):
+        return ["swift"]
+    return []
+
+
+def ensure_toolchain_installed(source_dir, swiftly_cmd):
+    """Pre-install the toolchain pinned by `.swift-version`, if any.
+
+    Walks no directories — only checks for `.swift-version` directly in
+    source_dir. swiftly itself walks parents at command-resolution time, but
+    we only auto-install when the source root explicitly pins a version.
+    No-op when swiftly is unavailable or no version file is present.
+    """
+    if not swiftly_cmd:
+        return
+    if not (source_dir / ".swift-version").is_file():
+        return
+    print(f"Ensuring pinned toolchain is installed (swiftly install)...")
+    subprocess.run(
+        swiftly_cmd + ["install", "--assume-yes"],
+        cwd=str(source_dir),
+        check=True,
+    )
+
+
+_TOOLS_VERSION_RE = re.compile(
+    r"^//\s*swift-tools-version\s*:\s*(\d+(?:\.\d+){0,2})"
+)
+
+
+def read_swift_tools_version(source_dir):
+    """Parse the `// swift-tools-version:` declaration in Package.swift.
+
+    Returns the version as a major.minor string (e.g. "6.3" or "5.10"),
+    stripping any patch component. Returns None if Package.swift is missing,
+    empty, or doesn't have a recognizable tools-version line.
+
+    Used as a fallback selector for swiftly when a source has no
+    `.swift-version` file but its Package.swift declares a minimum toolchain.
+    """
+    package_swift = Path(source_dir) / "Package.swift"
+    if not package_swift.is_file():
+        return None
+    try:
+        text = package_swift.read_text()
+    except OSError:
+        return None
+    if not text:
+        return None
+    first_line = text.splitlines()[0]
+    m = _TOOLS_VERSION_RE.match(first_line)
+    if not m:
+        return None
+    parts = m.group(1).split(".")
+    return ".".join(parts[:2]) if len(parts) >= 2 else parts[0]
 
 
 def validate_sources(config):
@@ -170,6 +245,13 @@ def validate_sources(config):
                     f"{label} has unsupported 'format' '{archive_format}' "
                     "(supported: 'tar.gz', 'zip')"
                 )
+            if "strip_availability" in entry and not isinstance(
+                entry["strip_availability"], bool
+            ):
+                errors.append(
+                    f"{label} 'strip_availability' must be a boolean "
+                    f"(got {type(entry['strip_availability']).__name__})"
+                )
             disallowed_for_archive = (
                 "targets", "docc_catalog", "path", "repo", "ref",
                 "preflight", "add_docc_plugin", "extra_flags",
@@ -194,6 +276,12 @@ def validate_sources(config):
                 errors.append(
                     f"{label} has both 'targets' and 'docc_catalog' "
                     "(they are mutually exclusive)"
+                )
+
+            if "strip_availability" in entry:
+                errors.append(
+                    f"{label} has 'strip_availability' but is not type "
+                    "'archive' (only allowed on archive sources)"
                 )
 
         if entry.get("add_docc_plugin") and entry_type != "git":
@@ -313,7 +401,7 @@ def fetch_archive(source, workspace):
     return archive_path
 
 
-def find_docc_catalog_for_target(source_dir, target):
+def find_docc_catalog_for_target(source_dir, target, swift_cmd):
     """Discover the .docc catalog directory for a Swift package target.
 
     Uses `swift package describe --type json` to find the target's source path,
@@ -321,7 +409,7 @@ def find_docc_catalog_for_target(source_dir, target):
     """
     try:
         result = subprocess.run(
-            ["swift", "package", "describe", "--type", "json"],
+            swift_cmd + ["package", "describe", "--type", "json"],
             cwd=str(source_dir),
             capture_output=True,
             text=True,
@@ -367,7 +455,7 @@ def find_doccarchive(search_dir, target):
     return None
 
 
-def add_docc_plugin(source_dir):
+def add_docc_plugin(source_dir, swift_cmd):
     """Inject swift-docc-plugin dependency if not already present."""
     package_swift = source_dir / "Package.swift"
     if "swift-docc-plugin" in package_swift.read_text():
@@ -375,8 +463,8 @@ def add_docc_plugin(source_dir):
         return
     print("Adding swift-docc-plugin dependency...")
     subprocess.run(
-        [
-            "swift", "package", "add-dependency",
+        swift_cmd + [
+            "package", "add-dependency",
             "https://github.com/swiftlang/swift-docc-plugin",
             "--from", "1.1.0",
         ],
@@ -385,12 +473,17 @@ def add_docc_plugin(source_dir):
     )
 
 
-def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc_cmd, env):
+def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc_cmd, env, swift_cmd=None, swiftly_cmd=None):
     """Build a single source entry.
 
     Returns a tuple of (list_of_archive_paths, manifest_entry) on success,
     or raises an exception on failure.
     """
+    if swift_cmd is None:
+        swift_cmd = ["swift"]
+    if swiftly_cmd is None:
+        swiftly_cmd = []
+
     source_id = source["id"]
     source_type = source["type"]
     docc_catalog = source.get("docc_catalog", "")
@@ -409,6 +502,14 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
             shutil.rmtree(str(dest))
         shutil.copytree(str(archive_path), str(dest))
         print(f"Copied {archive_path} -> {dest}")
+
+        if source.get("strip_availability"):
+            print(f"Stripping availability from {dest}...")
+            scanned, modified, removed = strip_archive(dest)
+            print(
+                f"  scanned {scanned} files; modified {modified}; "
+                f"removed {removed} 'platforms' keys"
+            )
 
         manifest_entry = {
             "id": source_id,
@@ -431,6 +532,37 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
     else:
         raise RuntimeError(f"unknown type '{source_type}'")
 
+    # If the source pins a specific Swift toolchain, ensure it's installed
+    # before any swift/docc command runs against it.
+    ensure_toolchain_installed(source_dir, swiftly_cmd)
+
+    # Fallback: if no `.swift-version` exists but Package.swift declares a
+    # minimum tools-version, route swift/docc through swiftly with that
+    # version as a `+selector`. This lets repos that pin via Package.swift
+    # (e.g. swift-testing) build without manual swiftly setup.
+    if (
+        swiftly_cmd
+        and not (source_dir / ".swift-version").is_file()
+    ):
+        tools_version = read_swift_tools_version(source_dir)
+        if tools_version:
+            print(
+                f"Package.swift requires swift-tools-version {tools_version}; "
+                f"using `swiftly +{tools_version}`."
+            )
+            try:
+                subprocess.run(
+                    swiftly_cmd + ["install", tools_version, "--assume-yes"],
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(
+                    f"  Note: `swiftly install {tools_version}` failed ({e}); "
+                    "continuing with default toolchain."
+                )
+            else:
+                swift_cmd = swift_cmd + [f"+{tools_version}"]
+
     # Run preflight command if configured
     preflight = source.get("preflight", "")
     if preflight:
@@ -444,14 +576,14 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
 
     # Inject swift-docc-plugin if requested
     if source.get("add_docc_plugin"):
-        add_docc_plugin(source_dir)
+        add_docc_plugin(source_dir, swift_cmd)
 
     archives = []
 
     if targets:
         # Install templates into each target's .docc catalog
         for target in targets:
-            catalog_dir = find_docc_catalog_for_target(source_dir, target)
+            catalog_dir = find_docc_catalog_for_target(source_dir, target, swift_cmd)
             if catalog_dir:
                 install_templates(catalog_dir, common_dir, f"{source_id}/{target}")
             else:
@@ -463,8 +595,8 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
         # Build each target via swift package
         for target in targets:
             print(f"Building target: {target}")
-            cmd = [
-                "swift", "package", "generate-documentation",
+            cmd = swift_cmd + [
+                "package", "generate-documentation",
                 "--target", target,
             ] + DOCC_BUILD_FLAGS + extra_flags
             subprocess.run(cmd, cwd=str(source_dir), check=True, env=env)
@@ -561,6 +693,41 @@ def merge_archives(archives, output_path, docc_cmd):
     print(f"Combined archive: {output_path}")
 
 
+def transform_static_hosting(archive_path, hosting_base_path, docc_cmd):
+    """Bake a hosting base path into a finished .doccarchive in place.
+
+    Runs `docc process-archive transform-for-static-hosting` on the archive
+    so its router and links resolve under /<hosting_base_path>/, then swaps
+    the transformed archive into the original location. On failure, leaves
+    the original archive untouched.
+    """
+    if not docc_cmd:
+        raise RuntimeError("'docc' tool not found (tried xcrun and PATH)")
+
+    archive_path = Path(archive_path)
+    transformed = archive_path.parent / f".{archive_path.name}.transforming"
+    if transformed.exists():
+        shutil.rmtree(str(transformed))
+
+    print(f"Applying hosting base path '{hosting_base_path}' to {archive_path.name}...")
+    cmd = docc_cmd + [
+        "process-archive", "transform-for-static-hosting",
+        str(archive_path),
+        "--hosting-base-path", hosting_base_path,
+        "--output-path", str(transformed),
+    ]
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError:
+        if transformed.exists():
+            shutil.rmtree(str(transformed))
+        raise
+
+    shutil.rmtree(str(archive_path))
+    shutil.move(str(transformed), str(archive_path))
+    print(f"Transformed archive: {archive_path}")
+
+
 def write_manifest(output_dir, version, entries):
     """Write build-manifest.json to the output directory."""
     manifest = {
@@ -585,7 +752,11 @@ def main():
     workspace = Path(args.workspace) if args.workspace else root_dir / ".workspace"
 
     check_prerequisites()
+    swiftly_cmd = find_swiftly()
+    swift_cmd = find_swift_command()
     docc_cmd = find_docc_command()
+    if swiftly_cmd:
+        print("swiftly detected — swift and docc invocations will honor .swift-version files.")
 
     # Validate common template files exist
     for tmpl in TEMPLATE_FILES:
@@ -646,6 +817,7 @@ def main():
             archives, manifest_entry = build_source(
                 source, root_dir, workspace, common_dir,
                 temp_archive_dir, docc_cmd, env,
+                swift_cmd=swift_cmd, swiftly_cmd=swiftly_cmd,
             )
         except ArchiveFetchError as e:
             print(f"Fatal: {e}")
@@ -665,6 +837,7 @@ def main():
             archives, manifest_entry = build_source(
                 source, root_dir, workspace, common_dir,
                 temp_archive_dir, docc_cmd, env,
+                swift_cmd=swift_cmd, swiftly_cmd=swiftly_cmd,
             )
             succeeded.append(source_id)
             all_archives.extend(archives)
@@ -714,6 +887,13 @@ def main():
                 except subprocess.CalledProcessError:
                     print("Error: docc merge failed")
                     failed.append("combined-merge")
+                else:
+                    try:
+                        transform_static_hosting(combined_output, version, docc_cmd)
+                        succeeded.append("static-hosting-transform")
+                    except subprocess.CalledProcessError:
+                        print("Error: docc process-archive transform-for-static-hosting failed")
+                        failed.append("static-hosting-transform")
 
     # Clean up intermediate archives
     if not args.only and temp_archive_dir.exists():

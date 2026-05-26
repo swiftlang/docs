@@ -14,7 +14,8 @@
       "type": "archive",
       "url": "https://ci.swift.org/job/build-stdlib-docs/36/artifact/*zip*/archive.zip",
       "format": "zip",
-      "docc_archive_name": "Swift.doccarchive"
+      "docc_archive_name": "Swift.doccarchive",
+      "strip_availability": true
     },
     {
       "id": "swift-migration-guide",

@@ -71,13 +71,33 @@ def main():
         sys.exit(2)
 
     archive = os.path.abspath(sys.argv[1])
+    try:
+        files_scanned, files_modified, keys_removed = strip_archive(archive)
+    except ValueError as e:
+        sys.stderr.write(f"error: {e}\n")
+        sys.exit(1)
+
+    print(
+        f"scanned {files_scanned} files; "
+        f"modified {files_modified}; "
+        f"removed {keys_removed} 'platforms' keys"
+    )
+
+
+def strip_archive(archive_path):
+    """Strip every 'platforms' key from JSON files under <archive>/data/.
+
+    Returns (files_scanned, files_modified, keys_removed).
+    Raises ValueError if archive_path doesn't look like a .doccarchive
+    (i.e. has no data/ subdirectory).
+    """
+    archive = os.fspath(archive_path)
     data_dir = os.path.join(archive, "data")
     if not os.path.isdir(data_dir):
-        sys.stderr.write(
-            f"error: {archive!r} does not look like a .doccarchive "
-            f"(missing data/ directory)\n"
+        raise ValueError(
+            f"{archive!r} does not look like a .doccarchive "
+            f"(missing data/ directory)"
         )
-        sys.exit(1)
 
     files_scanned = 0
     files_modified = 0
@@ -98,11 +118,7 @@ def main():
                 files_modified += 1
                 keys_removed += removed
 
-    print(
-        f"scanned {files_scanned} files; "
-        f"modified {files_modified}; "
-        f"removed {keys_removed} 'platforms' keys"
-    )
+    return files_scanned, files_modified, keys_removed
 
 
 if __name__ == "__main__":

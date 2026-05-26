@@ -8,3 +8,4 @@ Package.resolved
 .build-output/
 **/*.docc/header.html
 **/*.docc/footer.html
+scripts/__pycache__/
