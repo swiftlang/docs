@@ -78,10 +78,13 @@ Each **frame line** has the form:
 <index> <address> <symbol> + <offset> in <image> at <path>:<line>
 ```
 
+> Note: In the plaintext format, Swift backtracing may also include the source code in the output if it's accessible when we're generating the crash report.
+
 The backtracer demangles the symbol by default.
 The `at <path>:<line>` portion appears only when the binary carries DWARF debug information
 and you run with `symbolicate=full` (the default).
-Stripped production binaries with `symbolicate=off` produce frames with the address and image name only.
+Stripped production binaries may produce frames with the address and image name only.
+Swift backtracing tryies to find the closest visible symbol.
 
 By default the trace includes registers and a list of loaded images for the crashed thread.
 You can tune or suppress both; see <doc:swift-backtrace-configuration#Captured-content>.

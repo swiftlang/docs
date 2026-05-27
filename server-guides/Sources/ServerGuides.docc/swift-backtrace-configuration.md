@@ -68,11 +68,11 @@ the fault occurred when a runaway recursion exceeds the limit.
 | Option | Values | Default | Notes |
 |---|---|---|---|
 | `unwind` | `auto`, `fast`, `precise` | `auto` | `fast` uses frame pointers only; `precise` may consult debug information, if present. `auto` picks a default based on the platform. |
-| `symbolicate` | `full`, `fast`, `off` | `full` | `full` resolves inlined frames using DWARF; `fast` resolves only the outermost symbol; `off` reports raw addresses. |
-| `cache` | `yes`, `no` | `yes` | Caches symbol lookups across frames. |
+| `symbolicate` | `full`, `fast`, `off` | `full` | `full` resolves inlined frames using DWARF and source locations using DWARF debug information, if it exists; `fast` only tries to resolve the source location; `off` reports raw addresses. |
+| `cache` | `yes`, `no` | `yes` | Enable cache mechanisms in the symbol fetching. `cache` as no effect on Linux. |
 
 Symbolication quality depends on what's in your binary.
-Stripped binaries report addresses without symbol names.
+Stripped binaries typically report addresses without symbol names, and backtracing may display the name of a visible symbol preceeding the address we're looking up along with an offset.
 To embed DWARF directly in a release binary, or to split debug info into a sidecar file the symbolicator can find by build ID, see <doc:building#Preserve-debug-information-for-symbolication>.
 To resolve addresses from a captured trace using either form, see <doc:debugging-a-service-using-a-backtrace#Map-a-frame-to-source>.
 
@@ -124,9 +124,9 @@ SWIFT_BACKTRACE=format=json,output-to=/var/crash-logs/
 | Option | Values | Default | Notes |
 |---|---|---|---|
 | `timeout` | duration (`30s`), `none` | `30s` | How long the runtime waits for the backtrace to finish. |
-| `swift-backtrace` | path | auto-detected | Override the implicit search and use the given absolute path directly. Required for statically linked binaries in minimal containers, where the implicit search can't reliably find the helper. |
+| `swift-backtrace` | path | auto-detected | Override the implicit search and use the given absolute path directly. Required for statically linked binaries in minimal containers, where the implicit search can't reliably find the helper. This option should be disabled in distro-supplied runtimes, since in that case the relevant helperis located at a fixed path. |
 | `warnings` | `enabled`, `suppressed` | `enabled` | Diagnostic messages from the backtracer itself. |
-| `close-fds` | `yes`, `no` | `no` | Close all open file descriptors in the crashing process before gathering the trace, useful in CI environments where leaked file descriptors cause resource contention. |
+| `close-fds` | `yes`, `no` | `no` | Close all open file descriptors in the crashing process before gathering the trace. Used to make sure that in container environments, centralised routing machinery detects the failure of the container early, before Swift-backtrace starts trying to generate a backtrace, so that the running service doesn't have additional requests routed to it that external systems would need to retry. |
 
 The runtime locates `swift-backtrace` by deriving a Swift root directory
 and searching a fixed set of subdirectories underneath it.
@@ -159,6 +159,7 @@ at it explicitly, or place the binary at one of the search locations.
 ### JSON crash log schema
 
 When `format=json`, the backtracer emits one JSON object per crash.
+The JSON object is presented as a single line — no line breaks in the JSON output — so that it's easier for log processing tooling to read the output.
 Addresses appear as hexadecimal strings (with `0x` prefix); raw byte data
 such as captured memory or build IDs appears as un-prefixed hexadecimal
 strings with no inter-byte whitespace.
@@ -384,7 +385,7 @@ general-purpose register and many more captured memory snapshots.
 ```
 
 A few things to note in this trace:
-
+- This example has been reformatted (pretty printed) to make it easier to read. Swift-backtrace outputs the JSON as a single line.
 - The async boundary in this program sits between `Main.main()` and
   `MyService.run()` — that's where the `asyncResumePoint` frames begin.
   `MyService.run()` itself appears as a `returnAddress` because at the moment

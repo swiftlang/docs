@@ -103,30 +103,6 @@ Release builds optimize for performance and don't embed DWARF debug information 
 Without DWARF, a crashing binary's stack trace reports raw addresses instead of function names, files, and line numbers.
 You have two ways to keep symbolication working: embed the debug information in the binary, or split it into a sidecar file you ship separately.
 
-### Embed DWARF in a release build
-
-Pass `-g` to the Swift compiler when building for release:
-
-```bash
-swift build -c release -Xswiftc -g
-```
-
-If your package also compiles C or C++ sources, forward `-g` to the C compiler as well:
-
-```bash
-swift build -c release -Xswiftc -g -Xcc -g
-```
-
-Confirm the resulting binary contains DWARF sections:
-
-```bash
-file .build/release/MyServer
-# .build/release/MyServer: ELF 64-bit LSB pie executable, ...,
-#   with debug_info, not stripped
-```
-
-This configuration produces larger binaries — often two to five times the size of a stripped release binary — but they need no companion file at symbolication time.
-
 ### Split debug information into a sidecar file
 
 For a smaller deployable artifact, separate the debug information into its own file and strip the original binary.
@@ -144,6 +120,15 @@ objcopy --strip-debug --strip-unneeded MyServer
 # Record a link from the stripped binary to its sidecar.
 objcopy --add-gnu-debuglink=MyServer.debug MyServer
 ```
+
+The Swift source repository has scripts to make debug sidecar files:
+
+- [make-debuglink](https://github.com/swiftlang/swift/blob/main/test/Backtracing/Inputs/make-debuglink)
+- [make-minidebug](https://github.com/swiftlang/swift/blob/main/test/Backtracing/Inputs/make-minidebug)
+
+That you can use to create debug sidecars.
+The Swift backtracer supports gzip, zstd, and lzma compressed data,
+provided it can locate the relevant dynamic libraries at runtime.
 
 You now have two artifacts: a small, stripped `MyServer` to ship in your container or distribution package, and a `MyServer.debug` to publish to a symbol server or ship in a companion debug-info package.
 For how symbolicators consume the sidecar at crash time, see <doc:debugging-a-service-using-a-backtrace#Map-a-frame-to-source>.
