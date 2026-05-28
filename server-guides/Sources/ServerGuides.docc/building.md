@@ -95,7 +95,7 @@ These executables bundle the Swift runtime directly:
 
 For deploying to VMs or bare metal where you don't control the system configuration, static linking removes the dependency on a pre-installed Swift runtime.
 
-> Note: This technique doesn't apply on Apple platforms.
+> Note: This technique doesn't apply to Apple platforms.
 
 ## Preserve debug information for symbolication
 
@@ -121,17 +121,10 @@ objcopy --strip-debug --strip-unneeded MyServer
 objcopy --add-gnu-debuglink=MyServer.debug MyServer
 ```
 
-The Swift source repository has scripts to make debug sidecar files:
-
-- [make-debuglink](https://github.com/swiftlang/swift/blob/main/test/Backtracing/Inputs/make-debuglink)
-- [make-minidebug](https://github.com/swiftlang/swift/blob/main/test/Backtracing/Inputs/make-minidebug)
-
-That you can use to create debug sidecars.
-The Swift backtracer supports gzip, zstd, and lzma compressed data,
-provided it can locate the relevant dynamic libraries at runtime.
-
 You now have two artifacts: a small, stripped `MyServer` to ship in your container or distribution package, and a `MyServer.debug` to publish to a symbol server or ship in a companion debug-info package.
 For how symbolicators consume the sidecar at crash time, see <doc:debugging-a-service-using-a-backtrace#Map-a-frame-to-source>.
+
+For additional examples of this kind of process, review the [backtracing scripts](https://github.com/swiftlang/swift/blob/main/test/Backtracing/Inputs/) in the Swift GitHub repository.
 
 ### Verify build IDs match
 
@@ -146,7 +139,7 @@ readelf -n MyServer.debug | grep 'Build ID'
 ```
 
 Both commands print the same hexadecimal value when the files match.
-A mismatch means the binary and sidecar came from different builds; in that case the sidecar can't symbolicate the binary and you need to rebuild both together.
+A mismatch means the binary and sidecar came from different builds; in that case, the sidecar can't symbolicate the binary, and you need to rebuild both together.
 
 ## Build for another platform
 
@@ -177,7 +170,7 @@ docker run --rm -it \
 ```
 
 These commands mount your current directory as `/code` in the container, set it as the working directory, and run `swift build` inside the Linux environment.
-The `swift:latest` container image provides this environment and `swift build` produces Linux-compatible build artifacts.
+The `swift:latest` container image provides this environment, and `swift build` produces Linux-compatible build artifacts.
 
 If you're on Apple silicon and need to target `x86_64` Linux servers, you need to specify the target platform with the `--platform` option:
 
@@ -202,20 +195,20 @@ The `-e QEMU_CPU=max` environment variable enables the maximum set of CPU featur
 
 To build your code into a container, you typically use a container declaration — a Dockerfile or Containerfile — that specifies all the steps to assemble the container image holding your build artifacts.
 Container-based builds work well in CI/CD pipelines and for validating that your code builds cleanly on Linux.
-However, Docker container builds can be slower than native builds, especially on Apple silicon where `x86_64` containers run through emulation.
+However, Docker container builds can be slower than native builds, especially on Apple silicon, where `x86_64` containers run through emulation.
 
 For more information on packaging your application or service, see <doc:packaging>.
 
 ### Build with a VS Code Dev Container
 
-Visual Studio Code supports the Dev Container feature that lets you open, build, and debug your project within a container running on your local machine.
+Visual Studio Code supports the Dev Container feature, which lets you open, build, and debug your project within a container running on your local machine.
 The Dev Container builds your code in the Linux environment that the container provides.
 For more information on using a Dev Container, read [Visual Studio Code Dev Containers](https://docs.swift.org/vscode/documentation/userdocs/remote-dev/).
 
 ### Cross-compile with the Static Linux SDK
 
 If the performance overhead of Docker-based builds affects your workflow, Swift 5.9 and later provide Static Linux SDKs.
-Find the link to install the static Linux SDK on the [install page at Swift.org](https://www.swift.org/install/), and detailed instructions in the article [Getting Started with the Static Linux SDK](https://www.swift.org/documentation/articles/static-linux-getting-started.html).
+Find the link to install the static Linux SDK on the [install page at Swift.org](https://www.swift.org/install/); for detailed instructions, see [Getting Started with the Static Linux SDK](https://www.swift.org/documentation/articles/static-linux-getting-started.html).
 The SDK enables cross-compilation directly from macOS to Linux without using a container:
 
 ```bash
