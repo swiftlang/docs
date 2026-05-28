@@ -159,7 +159,7 @@ so typical builds don't need extra flags.
 The fast unwinder relies on frame pointers; without them, the runtime falls back to DWARF-based unwinding,
 which is slower but still produces complete traces when `.eh_frame` information is present.
 
-For the full set of `SWIFT_BACKTRACE` options, see <doc:swift-backtrace-configuration>.
+For the full set of `SWIFT_BACKTRACE` options, see the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing).
 To debug your service using a captured trace, see <doc:debugging-a-service-using-a-backtrace>.
 
 ### Cache build artifacts to speed up rebuilds

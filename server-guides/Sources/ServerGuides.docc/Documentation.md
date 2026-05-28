@@ -13,6 +13,6 @@
 - <doc:deploying-static-binaries>
 - <doc:debugging-a-service-using-a-backtrace>
 
-### Reference
+## See Also
 
-- <doc:swift-backtrace-configuration>
+- [Backtracing reference (swiftlang/swift)](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst)

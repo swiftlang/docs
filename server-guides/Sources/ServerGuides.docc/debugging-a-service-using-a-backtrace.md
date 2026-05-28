@@ -9,7 +9,7 @@ When your Swift service crashes on Linux, the runtime spawns a helper process,
 This article covers how to persist a trace from a container, read its structure,
 map frames back to your source, recognize common crash patterns, and reproduce the crash locally.
 
-For the configuration options the trace responds to, see <doc:swift-backtrace-configuration>.
+For the configuration options the trace responds to, see the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing).
 To install the backtracer in a container image,
 see <doc:packaging#Include-the-backtracer-in-the-runtime-image>.
 
@@ -33,7 +33,7 @@ The `symbolicate=off` setting keeps crash handling fast in production;
 see <doc:debugging-a-service-using-a-backtrace#Map-a-frame-to-source> for how to resolve symbols afterward.
 
 For the format of the captured file (text or JSON) and other output options,
-see <doc:swift-backtrace-configuration#Output>.
+see the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing).
 
 ### Read the trace structure
 
@@ -70,7 +70,7 @@ and as `SIGTRAP` on aarch64 (where it lowers to `brk #1`).
 The **thread line** identifies which thread crashed.
 The backtracer captures only the crashed thread by default.
 Use `SWIFT_BACKTRACE=threads=all` to see every thread which helps when diagnosing deadlocks.
-For more information, see <doc:swift-backtrace-configuration#Captured-content>.
+For more information, see the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing).
 
 Each **frame line** has the form:
 
@@ -87,7 +87,7 @@ Stripped production binaries may produce frames with the address and image name 
 Swift backtracing tryies to find the closest visible symbol.
 
 By default the trace includes registers and a list of loaded images for the crashed thread.
-You can tune or suppress both; see <doc:swift-backtrace-configuration#Captured-content>.
+You can tune or suppress both; see the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing).
 
 ### Map a frame to source
 
@@ -102,7 +102,7 @@ and resolve symbols offline.
 Build production binaries with debug info stripped and run with `SWIFT_BACKTRACE=symbolicate=off`.
 Each captured frame has its address and the image (binary or shared library) it belongs to —
 enough to resolve to source later.
-See <doc:swift-backtrace-configuration#Unwinding-and-symbolication> for the full set of `symbolicate` values
+See the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing) for the full set of `symbolicate` values
 and the trade-offs between `off`, `fast`, and `full`.
 
 **Post-mortem, on a developer or build machine.**
@@ -184,7 +184,7 @@ Two paths are useful:
 - **Rerun with the interactive backtracer.**
   Set `SWIFT_BACKTRACE=interactive=yes` so the backtracer drops into a debugger-like prompt at crash time
   instead of printing and exiting.
-  See <doc:swift-backtrace-configuration#Enabling-and-presentation> for the option.
+  See the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing) for the option.
   Interactive mode requires a TTY, so it's a developer-machine tool, not a production setting.
 
 ### Diagnose missing backtraces
@@ -201,7 +201,7 @@ the cause is almost always one of the following:
   directory; it doesn't consult `PATH`.
   In a statically linked binary that doesn't follow the toolchain layout,
   set `SWIFT_BACKTRACE=swift-backtrace=<absolute-path>` or `SWIFT_ROOT=<root>`.
-  See <doc:swift-backtrace-configuration#Advanced-options> for the search order.
+  See the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing) for the search order.
 
 - term `/proc` isn't mounted:
   The backtracer enumerates threads and locates loaded images through `/proc/<pid>/`.

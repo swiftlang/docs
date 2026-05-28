@@ -144,7 +144,7 @@ The `swift-backtrace=/swift-backtrace` setting overrides the runtime's default s
 and points it to the correct location.
 The `symbolicate=off` setting keeps crash handling fast; you resolve addresses against the original binary later.
 
-For the full set of `SWIFT_BACKTRACE` options, see <doc:swift-backtrace-configuration>.
+For the full set of `SWIFT_BACKTRACE` options, see the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing).
 To debug your service using a captured trace, see <doc:debugging-a-service-using-a-backtrace>.
 
 ### Build and publish with Swift Container Plugin
