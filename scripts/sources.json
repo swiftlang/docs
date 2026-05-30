@@ -12,7 +12,7 @@
     {
       "id": "swift-stdlib",
       "type": "archive",
-      "url": "https://ci.swift.org/job/build-stdlib-docs/36/artifact/*zip*/archive.zip",
+      "url": "https://download.swift.org/docs/main/swift_docc.zip",
       "format": "zip",
       "docc_archive_name": "Swift.doccarchive",
       "strip_availability": true
