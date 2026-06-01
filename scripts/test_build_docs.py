@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_docs  # noqa: E402
 import curate_navigator  # noqa: E402
 import strip_availability  # noqa: E402
+import validate_navigation as validate_navigation_cli  # noqa: E402
 
 
 def _validate(config):
@@ -1167,6 +1168,88 @@ class FinalizeCombinedArchive(unittest.TestCase):
         self.assertEqual(succeeded, ["combined-merge", "static-hosting-transform"])
         self.assertEqual(failed, [])
 
+    def _merge_writes_index(self, modules):
+        """Build a fake subprocess.run that writes a merged index.json on merge.
+
+        `modules` is a list of (title, path); merge writes them as the
+        synthesized root's children. The transform step succeeds by producing
+        an output archive at --output-path.
+        """
+        def fake_run(cmd, **kw):
+            out_idx = cmd.index("--output-path") + 1
+            out = Path(cmd[out_idx])
+            out.mkdir(parents=True, exist_ok=True)
+            if "merge" in cmd:
+                (out / "index").mkdir(parents=True, exist_ok=True)
+                doc = {
+                    "schemaVersion": {"major": 0, "minor": 1, "patch": 2},
+                    "interfaceLanguages": {
+                        "swift": [{
+                            "title": "Swift - main",
+                            "children": [
+                                {"type": "module", "title": t, "path": p}
+                                for t, p in modules
+                            ],
+                            "path": "/documentation",
+                            "type": "module",
+                        }]
+                    },
+                }
+                (out / "index" / "index.json").write_text(json.dumps(doc) + "\n")
+            else:
+                (out / "index.html").write_text("transformed")
+            return subprocess.CompletedProcess(cmd, 0)
+        return fake_run
+
+    def test_curation_failure_records_navigator_curation(self):
+        nav = {
+            "version": 1,
+            "groups": [{"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+            ]}],
+            "hidden": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+            # Index has an extra module the manifest neither groups nor hides.
+            fake_run = self._merge_writes_index([
+                ("Swift", "/documentation/swift"),
+                ("Extra", "/documentation/extra"),
+            ])
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                succeeded, failed = build_docs._finalize_combined_archive(
+                    [archive], tmp_path, "main", ["docc"], prior_failed=[],
+                    navigation=nav,
+                )
+        self.assertEqual(succeeded, ["combined-merge"])
+        self.assertEqual(failed, ["navigator-curation"])
+
+    def test_curation_success_records_navigator_curation(self):
+        nav = {
+            "version": 1,
+            "groups": [{"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+            ]}],
+            "hidden": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+            fake_run = self._merge_writes_index([("Swift", "/documentation/swift")])
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                succeeded, failed = build_docs._finalize_combined_archive(
+                    [archive], tmp_path, "main", ["docc"], prior_failed=[],
+                    navigation=nav,
+                )
+        self.assertEqual(
+            succeeded,
+            ["combined-merge", "navigator-curation", "static-hosting-transform"],
+        )
+        self.assertEqual(failed, [])
+
 
 class InjectCustomTemplatesIntoStubs(unittest.TestCase):
     """Workaround for swiftlang/swift-docc#1532: see build_docs function docstring."""
@@ -1417,6 +1500,332 @@ class AssembleInSourceOrder(unittest.TestCase):
         archives, entries = build_docs.assemble_in_source_order({}, num_sources=3)
         self.assertEqual(archives, [])
         self.assertEqual(entries, [])
+
+
+# ---------------------------------------------------------------------------
+# Navigator curation (curate_navigator.py)
+# ---------------------------------------------------------------------------
+
+def _module(title, path):
+    """Build a module navigator node (key order mirrors real docc output)."""
+    return {"type": "module", "title": title, "path": path}
+
+
+def _make_index(tmp_path, children, langs=("swift",)):
+    """Write a minimal merged index.json into a fresh archive; return its Path.
+
+    Mirrors the real shape: top-level schemaVersion / references /
+    includedArchiveIdentifiers / interfaceLanguages, with a single synthesized
+    root module per language whose `children` is the curation surface.
+    """
+    archive = tmp_path / "combined.doccarchive"
+    (archive / "index").mkdir(parents=True)
+    doc = {
+        "schemaVersion": {"major": 0, "minor": 1, "patch": 2},
+        "references": {"keep": "me"},
+        "includedArchiveIdentifiers": ["A", "B"],
+        "interfaceLanguages": {
+            lang: [
+                {
+                    "title": "Swift - main",
+                    "children": [dict(c) for c in children],
+                    "path": "/documentation",
+                    "type": "module",
+                }
+            ]
+            for lang in langs
+        },
+    }
+    (archive / "index" / "index.json").write_text(json.dumps(doc, indent=2) + "\n")
+    return archive
+
+
+def _children_of(archive, lang="swift"):
+    doc = json.loads((archive / "index" / "index.json").read_text())
+    return doc["interfaceLanguages"][lang][0]["children"]
+
+
+class ValidateNavigation(unittest.TestCase):
+    SOURCES = {"version": "main", "sources": [{"id": "a"}, {"id": "b"}]}
+
+    def _nav(self, **over):
+        nav = {
+            "version": 1,
+            "groups": [
+                {"title": "Lang", "modules": [
+                    {"source": "a", "path": "/documentation/swift"},
+                ]},
+            ],
+            "hidden": [
+                {"source": "b", "path": "/documentation/internal"},
+            ],
+        }
+        nav.update(over)
+        return nav
+
+    def test_valid_navigation_has_no_errors(self):
+        self.assertEqual(
+            curate_navigator.validate_navigation(self._nav(), self.SOURCES), []
+        )
+
+    def test_unknown_source_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"source": "ghost", "path": "/documentation/swift"},
+            ]},
+        ], hidden=[{"source": "b", "path": "/documentation/internal"}])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("ghost" in e for e in errors), errors)
+
+    def test_source_missing_from_navigation_is_reported(self):
+        # 'b' is in sources.json but referenced nowhere in navigation.
+        nav = self._nav(hidden=[])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("b" in e for e in errors), errors)
+
+    def test_duplicate_path_is_reported(self):
+        nav = self._nav(
+            groups=[{"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+            ]}],
+            hidden=[
+                {"source": "b", "path": "/documentation/swift"},
+            ],
+        )
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("/documentation/swift" in e for e in errors), errors)
+
+    def test_group_without_title_is_reported(self):
+        nav = self._nav(groups=[{"title": "", "modules": [
+            {"source": "a", "path": "/documentation/swift"},
+        ]}])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(errors)
+
+    def test_malformed_entry_missing_path_is_reported(self):
+        nav = self._nav(groups=[{"title": "Lang", "modules": [
+            {"source": "a"},
+        ]}])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(errors)
+
+
+class CurateNavigator(unittest.TestCase):
+    def _nav(self):
+        return {
+            "version": 1,
+            "groups": [
+                {"title": "Language", "modules": [
+                    {"source": "a", "path": "/documentation/swift",
+                     "title": "The Swift Language"},
+                    {"source": "b", "path": "/documentation/testing"},
+                ]},
+            ],
+            "hidden": [
+                {"source": "a", "path": "/documentation/internal"},
+            ],
+        }
+
+    def _happy_children(self):
+        return [
+            _module("Swift", "/documentation/swift"),
+            _module("Internal", "/documentation/internal"),
+            _module("Testing", "/documentation/testing"),
+        ]
+
+    def test_groups_hides_and_orders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), self._happy_children())
+            curate_navigator.curate_navigator(archive, self._nav())
+            kids = _children_of(archive)
+
+        self.assertEqual(len(kids), 3)
+        self.assertEqual(kids[0], {"type": "groupMarker", "title": "Language"})
+        self.assertNotIn("path", kids[0])
+        # Manifest order: swift (renamed) then testing; internal hidden.
+        self.assertEqual(kids[1]["path"], "/documentation/swift")
+        self.assertEqual(kids[1]["title"], "The Swift Language")
+        self.assertEqual(kids[2]["path"], "/documentation/testing")
+        self.assertFalse(any(k.get("path") == "/documentation/internal" for k in kids))
+
+    def test_dangling_manifest_path_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [_module("Swift", "/documentation/swift")])
+            nav = {
+                "version": 1,
+                "groups": [{"title": "Language", "modules": [
+                    {"source": "a", "path": "/documentation/swift"},
+                    {"source": "a", "path": "/documentation/missing"},
+                ]}],
+                "hidden": [],
+            }
+            with self.assertRaises(curate_navigator.NavigationError):
+                curate_navigator.curate_navigator(archive, nav)
+
+    def test_unlisted_index_module_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [
+                _module("Swift", "/documentation/swift"),
+                _module("Extra", "/documentation/extra"),
+            ])
+            nav = {
+                "version": 1,
+                "groups": [{"title": "Language", "modules": [
+                    {"source": "a", "path": "/documentation/swift"},
+                ]}],
+                "hidden": [],
+            }
+            with self.assertRaises(curate_navigator.NavigationError):
+                curate_navigator.curate_navigator(archive, nav)
+
+    def test_preserves_top_level_keys_and_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), self._happy_children())
+            curate_navigator.curate_navigator(archive, self._nav())
+            doc = json.loads((archive / "index" / "index.json").read_text())
+
+        self.assertEqual(
+            list(doc.keys()),
+            ["schemaVersion", "references", "includedArchiveIdentifiers",
+             "interfaceLanguages"],
+        )
+        self.assertEqual(doc["references"], {"keep": "me"})
+        self.assertEqual(doc["includedArchiveIdentifiers"], ["A", "B"])
+        self.assertEqual(doc["schemaVersion"], {"major": 0, "minor": 1, "patch": 2})
+
+    def test_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), self._happy_children())
+            index = archive / "index" / "index.json"
+            curate_navigator.curate_navigator(archive, self._nav())
+            once = index.read_bytes()
+            curate_navigator.curate_navigator(archive, self._nav())
+            twice = index.read_bytes()
+        self.assertEqual(once, twice)
+
+    def test_curates_each_interface_language(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), self._happy_children(),
+                                  langs=("swift", "occ"))
+            curate_navigator.curate_navigator(archive, self._nav())
+            for lang in ("swift", "occ"):
+                kids = _children_of(archive, lang)
+                self.assertEqual(kids[0]["type"], "groupMarker")
+                self.assertFalse(
+                    any(k.get("path") == "/documentation/internal" for k in kids)
+                )
+
+    def test_missing_index_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "empty.doccarchive"
+            archive.mkdir()
+            with self.assertRaises(curate_navigator.NavigationError):
+                curate_navigator.curate_navigator(archive, self._nav())
+
+    def test_malformed_index_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "bad.doccarchive"
+            (archive / "index").mkdir(parents=True)
+            (archive / "index" / "index.json").write_text("{not json")
+            with self.assertRaises(json.JSONDecodeError):
+                curate_navigator.curate_navigator(archive, self._nav())
+
+
+class CurateNavigatorDryRun(unittest.TestCase):
+    def _nav(self):
+        return {
+            "version": 1,
+            "groups": [{"title": "Language", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+            ]}],
+            "hidden": [{"source": "a", "path": "/documentation/internal"}],
+        }
+
+    def test_returns_curated_children_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [
+                _module("Swift", "/documentation/swift"),
+                _module("Internal", "/documentation/internal"),
+            ])
+            index = archive / "index" / "index.json"
+            before = index.read_bytes()
+            result = curate_navigator.dry_run(archive, self._nav())
+            after = index.read_bytes()
+
+        self.assertEqual(before, after)  # archive untouched
+        kids = result["swift"]
+        self.assertEqual(kids[0], {"type": "groupMarker", "title": "Language"})
+        self.assertEqual([k.get("path") for k in kids[1:]], ["/documentation/swift"])
+
+    def test_unlisted_module_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [
+                _module("Swift", "/documentation/swift"),
+                _module("Extra", "/documentation/extra"),
+            ])
+            with self.assertRaises(curate_navigator.NavigationError):
+                curate_navigator.dry_run(archive, self._nav())
+
+
+class ValidateNavigationCLI(unittest.TestCase):
+    def _setup(self, tmp, nav, sources, archive_modules=None):
+        """Write nav + sources files (and optionally an archive); return argv."""
+        tmp = Path(tmp)
+        nav_path = tmp / "navigation.json"
+        src_path = tmp / "sources.json"
+        nav_path.write_text(json.dumps(nav))
+        src_path.write_text(json.dumps(sources))
+        argv = ["--navigation", str(nav_path), "--sources", str(src_path)]
+        if archive_modules is not None:
+            archive = _make_index(tmp, [_module(t, p) for t, p in archive_modules])
+            argv += ["--archive", str(archive)]
+        return argv
+
+    SOURCES = {"version": "main", "sources": [{"id": "a"}, {"id": "b"}]}
+
+    def _nav(self):
+        return {
+            "version": 1,
+            "groups": [{"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+            ]}],
+            "hidden": [{"source": "b", "path": "/documentation/internal"}],
+        }
+
+    def test_valid_without_archive_returns_0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            argv = self._setup(tmp, self._nav(), self.SOURCES)
+            self.assertEqual(validate_navigation_cli.main(argv), 0)
+
+    def test_unknown_source_returns_1(self):
+        nav = self._nav()
+        nav["groups"][0]["modules"][0]["source"] = "ghost"
+        with tempfile.TemporaryDirectory() as tmp:
+            argv = self._setup(tmp, nav, self.SOURCES)
+            self.assertEqual(validate_navigation_cli.main(argv), 1)
+
+    def test_archive_fully_covered_returns_0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            argv = self._setup(
+                tmp, self._nav(), self.SOURCES,
+                archive_modules=[
+                    ("Swift", "/documentation/swift"),
+                    ("Internal", "/documentation/internal"),
+                ],
+            )
+            self.assertEqual(validate_navigation_cli.main(argv), 0)
+
+    def test_archive_with_unlisted_module_returns_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            argv = self._setup(
+                tmp, self._nav(), self.SOURCES,
+                archive_modules=[
+                    ("Swift", "/documentation/swift"),
+                    ("Internal", "/documentation/internal"),
+                    ("Extra", "/documentation/extra"),
+                ],
+            )
+            self.assertEqual(validate_navigation_cli.main(argv), 1)
 
 
 if __name__ == "__main__":

@@ -32,12 +32,164 @@ class NavigationError(Exception):
     """Raised when curation cannot be applied (dangling/unlisted modules, etc.)."""
 
 
+def _entries(navigation):
+    """Yield every (entry, where) across groups and hidden, for validation."""
+    for group in navigation.get("groups", []):
+        for entry in group.get("modules", []):
+            yield entry, "group"
+    for entry in navigation.get("hidden", []):
+        yield entry, "hidden"
+
+
 def validate_navigation(navigation, sources_config):
     """Validate navigation.json against itself and sources.json (offline).
 
     Returns a list of human-readable error strings; empty means valid.
     """
-    raise NotImplementedError
+    errors = []
+
+    if "version" not in navigation:
+        errors.append("navigation.json: missing required 'version'")
+
+    groups = navigation.get("groups", [])
+    if not isinstance(groups, list):
+        errors.append("navigation.json: 'groups' must be a list")
+        groups = []
+    hidden = navigation.get("hidden", [])
+    if not isinstance(hidden, list):
+        errors.append("navigation.json: 'hidden' must be a list")
+
+    # Per-group shape.
+    for i, group in enumerate(groups):
+        if not isinstance(group, dict):
+            errors.append(f"navigation.json: group #{i} must be an object")
+            continue
+        if not group.get("title"):
+            errors.append(f"navigation.json: group #{i} is missing a non-empty 'title'")
+        if not isinstance(group.get("modules", []), list):
+            errors.append(f"navigation.json: group '{group.get('title')}' "
+                          "'modules' must be a list")
+
+    # Per-entry shape, duplicate paths, and source linkage.
+    source_ids = {s.get("id") for s in sources_config.get("sources", [])}
+    referenced_sources = set()
+    seen_paths = set()
+    for entry, where in _entries(navigation):
+        if not isinstance(entry, dict):
+            errors.append(f"navigation.json: a {where} entry must be an object")
+            continue
+        src = entry.get("source")
+        path = entry.get("path")
+        if not src:
+            errors.append(f"navigation.json: a {where} entry is missing 'source'")
+        if not path:
+            errors.append(f"navigation.json: a {where} entry is missing 'path'")
+        if src:
+            referenced_sources.add(src)
+            if src not in source_ids:
+                errors.append(
+                    f"navigation.json: entry references source '{src}' "
+                    "not present in sources.json"
+                )
+        if path:
+            if path in seen_paths:
+                errors.append(
+                    f"navigation.json: path '{path}' appears more than once"
+                )
+            seen_paths.add(path)
+
+    # Completeness: every source must be represented (placed or hidden).
+    for sid in sorted(s for s in source_ids if s):
+        if sid not in referenced_sources:
+            errors.append(
+                f"navigation.json: source '{sid}' from sources.json is not "
+                "represented (place it in a group or list it under 'hidden')"
+            )
+
+    return errors
+
+
+def _group_paths(navigation):
+    """Paths that must be rendered (and therefore must exist in the index)."""
+    return {
+        entry["path"]
+        for group in navigation.get("groups", [])
+        for entry in group.get("modules", [])
+    }
+
+
+def _manifest_paths(navigation):
+    """All paths the manifest accounts for (grouped + hidden)."""
+    return {entry["path"] for entry, _ in _entries(navigation)}
+
+
+def _curate_children(children, navigation):
+    """Return a rewritten children list per the manifest.
+
+    Raises NavigationError on dangling grouped paths, on index modules the
+    manifest neither groups nor hides, or on unexpected pathless nodes.
+    """
+    # Drop any existing group markers so re-running is idempotent, then index
+    # the remaining nodes by path.
+    real_nodes = [c for c in children if c.get("type") != "groupMarker"]
+    path_map = {}
+    for node in real_nodes:
+        path = node.get("path")
+        if not path:
+            raise NavigationError(
+                f"navigator node without a path cannot be curated: {node!r}"
+            )
+        path_map[path] = node
+
+    index_paths = set(path_map)
+
+    # Grouped modules must exist; hidden ones may already be absent (e.g. on a
+    # second curation pass), so they are not required to be present.
+    dangling = _group_paths(navigation) - index_paths
+    if dangling:
+        raise NavigationError(
+            "navigation.json groups modules absent from the merged index: "
+            + ", ".join(sorted(dangling))
+        )
+
+    # Strict total coverage: every index module must be grouped or hidden.
+    unlisted = index_paths - _manifest_paths(navigation)
+    if unlisted:
+        raise NavigationError(
+            "modules present in the merged index are neither grouped nor hidden "
+            "in navigation.json: " + ", ".join(sorted(unlisted))
+        )
+
+    new_children = []
+    for group in navigation.get("groups", []):
+        new_children.append({"type": "groupMarker", "title": group["title"]})
+        for entry in group.get("modules", []):
+            node = path_map[entry["path"]]
+            if entry.get("title"):
+                node["title"] = entry["title"]
+            new_children.append(node)
+    # Hidden entries are simply not re-appended.
+    return new_children
+
+
+def _load_index(archive_path):
+    """Load <archive_path>/index/index.json; raise NavigationError if absent."""
+    index_path = Path(archive_path) / "index" / "index.json"
+    if not index_path.is_file():
+        raise NavigationError(f"index.json not found at {index_path}")
+    return index_path, json.loads(index_path.read_text())
+
+
+def _curate_doc(doc, navigation):
+    """Curate every interface-language tree of a loaded index doc, in place."""
+    for lang, roots in doc.get("interfaceLanguages", {}).items():
+        if not roots:
+            continue
+        root = roots[0]
+        children = root.get("children")
+        if children is None:
+            continue
+        root["children"] = _curate_children(children, navigation)
 
 
 def curate_navigator(archive_path, navigation):
@@ -45,4 +197,26 @@ def curate_navigator(archive_path, navigation):
 
     Raises NavigationError / OSError / json.JSONDecodeError on failure.
     """
-    raise NotImplementedError
+    index_path, doc = _load_index(archive_path)
+    _curate_doc(doc, navigation)
+
+    tmp = index_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    os.replace(tmp, index_path)
+
+
+def dry_run(archive_path, navigation):
+    """Compute the curated navigator WITHOUT modifying the archive.
+
+    Returns a dict mapping each interface language to the list of nodes its
+    sidebar would contain after curation. Raises the same errors as
+    ``curate_navigator`` (dangling/unlisted modules, missing/malformed index)
+    so it doubles as a coverage check while editing ``navigation.json``.
+    """
+    _, doc = _load_index(archive_path)
+    _curate_doc(doc, navigation)
+    return {
+        lang: roots[0].get("children", [])
+        for lang, roots in doc.get("interfaceLanguages", {}).items()
+        if roots
+    }

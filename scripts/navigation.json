@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "title": "The Swift Language",
+      "modules": [
+        { "source": "swift-stdlib", "path": "/documentation/swift" },
+        { "source": "swift-book", "path": "/documentation/the-swift-programming-language" },
+        { "source": "swift-migration-guide", "path": "/documentation/migrationguide" },
+        { "source": "compiler-diagnostics", "path": "/documentation/diagnostics" }
+      ]
+    },
+    {
+      "title": "Package Manager",
+      "modules": [
+        { "source": "swiftpm", "path": "/documentation/packagemanagerdocs", "title": "Swift Package Manager" },
+        { "source": "swiftpm", "path": "/documentation/packagedescription" },
+        { "source": "swiftpm", "path": "/documentation/packageplugin" }
+      ]
+    },
+    {
+      "title": "Testing",
+      "modules": [
+        { "source": "swift-testing", "path": "/documentation/testing" }
+      ]
+    },
+    {
+      "title": "Server-Side Swift",
+      "modules": [
+        { "source": "server-guides", "path": "/documentation/serverguides" },
+        { "source": "swift-server-todos-tutorial", "path": "/tutorials/getting-started-swift-server" }
+      ]
+    },
+    {
+      "title": "Tools",
+      "modules": [
+        { "source": "swiftly", "path": "/documentation/swiftlydocs", "title": "Swiftly" },
+        { "source": "vscode-swift", "path": "/documentation/userdocs", "title": "Swift for VS Code" },
+        { "source": "docc-documentation", "path": "/documentation/docc" }
+      ]
+    },
+    {
+      "title": "Platforms",
+      "modules": [
+        { "source": "embedded-swift", "path": "/documentation/embeddedswift" },
+        { "source": "swift-wasm", "path": "/documentation/wasmguide" },
+        { "source": "swift-android", "path": "/documentation/swiftandroid" }
+      ]
+    }
+  ],
+  "hidden": [
+    { "source": "swift-stdlib", "path": "/documentation/cxx" },
+    { "source": "swift-stdlib", "path": "/documentation/cxxstdlib" },
+    { "source": "swift-stdlib", "path": "/documentation/distributed" },
+    { "source": "swift-stdlib", "path": "/documentation/oslogtesthelper" },
+    { "source": "swift-stdlib", "path": "/documentation/observation" },
+    { "source": "swift-stdlib", "path": "/documentation/regexbuilder" },
+    { "source": "swift-stdlib", "path": "/documentation/runtime" },
+    { "source": "swift-stdlib", "path": "/documentation/runtimeunittest" },
+    { "source": "swift-stdlib", "path": "/documentation/stdlibunittest" },
+    { "source": "swift-stdlib", "path": "/documentation/stdlibunittestfoundationextras" },
+    { "source": "swift-stdlib", "path": "/documentation/swiftononesupport" },
+    { "source": "swift-stdlib", "path": "/documentation/swiftprivate" },
+    { "source": "swift-stdlib", "path": "/documentation/swiftprivatelibcextras" },
+    { "source": "swift-stdlib", "path": "/documentation/swiftprivatethreadextras" },
+    { "source": "swift-stdlib", "path": "/documentation/swiftreflectiontest" },
+    { "source": "swift-stdlib", "path": "/documentation/synchronization" },
+    { "source": "swift-stdlib", "path": "/documentation/_builtin_float" },
+    { "source": "swift-stdlib", "path": "/documentation/_differentiation" },
+    { "source": "swift-stdlib", "path": "/documentation/_regexparser" },
+    { "source": "swift-stdlib", "path": "/documentation/_volatile" }
+  ]
+}

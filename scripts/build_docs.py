@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from strip_availability import strip_archive
+from curate_navigator import curate_navigator, validate_navigation, NavigationError
 
 
 class ArchiveFetchError(Exception):
@@ -876,13 +877,14 @@ def inject_custom_templates_into_stubs(archive_path, common_dir):
     return patched
 
 
-def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prior_failed, common_dir=None):
+def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prior_failed, common_dir=None, navigation=None):
     """Merge per-source archives and apply the static-hosting transform.
 
     Returns (succeeded_steps, failed_steps): names that should be added to
     the build summary's success and failure lists, respectively. Bails early
-    on missing prerequisites; isolates the merge step from the transform step
-    so a transform failure still records the merge as succeeded.
+    on missing prerequisites; isolates the merge step from the curation and
+    transform steps so a later failure still records the earlier steps as
+    succeeded.
     """
     print()
     print("=" * 40)
@@ -917,18 +919,32 @@ def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prio
         print("Error: docc merge failed")
         return [], ["combined-merge"]
 
+    if navigation is not None:
+        try:
+            curate_navigator(combined_output, navigation)
+            print("Curated combined navigator per navigation.json.")
+        except (NavigationError, OSError, json.JSONDecodeError) as e:
+            print(f"Error: navigator curation failed: {e}")
+            return ["combined-merge"], ["navigator-curation"]
+
     try:
         transform_static_hosting(combined_output, version, docc_cmd)
     except subprocess.CalledProcessError:
         print("Error: docc process-archive transform-for-static-hosting failed")
-        return ["combined-merge"], ["static-hosting-transform"]
+        curated = ["combined-merge"]
+        if navigation is not None:
+            curated.append("navigator-curation")
+        return curated, ["static-hosting-transform"]
 
     # Workaround for swiftlang/swift-docc#1532 — drop this when fixed.
     if common_dir is not None:
         patched = inject_custom_templates_into_stubs(combined_output, common_dir)
         print(f"Patched custom-header/footer into {patched} per-route stub(s).")
 
-    return ["combined-merge", "static-hosting-transform"], []
+    succeeded = ["combined-merge", "static-hosting-transform"]
+    if navigation is not None:
+        succeeded.insert(1, "navigator-curation")
+    return succeeded, []
 
 
 def assemble_in_source_order(results_by_index, num_sources):
@@ -1016,6 +1032,26 @@ def main():
         sys.exit(1)
     print(f"Validated {len(config['sources'])} source entries.")
 
+    # Load and validate the navigation manifest (drives combined-archive
+    # sidebar curation). Validated up front so a mismatch fails fast.
+    navigation_file = script_dir / "navigation.json"
+    navigation = None
+    if navigation_file.is_file():
+        try:
+            navigation = json.loads(navigation_file.read_text())
+        except json.JSONDecodeError as e:
+            print(f"Error: navigation.json is not valid JSON: {e}")
+            sys.exit(1)
+        nav_errors = validate_navigation(navigation, config)
+        if nav_errors:
+            for e in nav_errors:
+                print(f"Validation error: {e}")
+            print("\nFix the errors in navigation.json before continuing.")
+            sys.exit(1)
+        print("Validated navigation.json against sources.json.")
+    else:
+        print("No navigation.json found — combined navigator will not be curated.")
+
     version = config["version"]
     sources = config["sources"]
 
@@ -1098,7 +1134,7 @@ def main():
     if all_archives and not args.only:
         s_steps, f_steps = _finalize_combined_archive(
             all_archives, output_dir, version, tools.docc, failed,
-            common_dir=common_dir,
+            common_dir=common_dir, navigation=navigation,
         )
         succeeded.extend(s_steps)
         failed.extend(f_steps)
