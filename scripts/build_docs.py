@@ -793,6 +793,7 @@ def merge_archives(archives, output_path, docc_cmd, landing_page_name):
     cmd = docc_cmd + ["merge"] + [str(a) for a in archives] + [
         "--output-path", str(output_path),
         "--synthesized-landing-page-name", landing_page_name,
+        "--synthesized-landing-page-kind", "Project",
         "--synthesized-landing-page-topics-style", "list",
     ]
     subprocess.run(cmd, check=True)

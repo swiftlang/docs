@@ -30,6 +30,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build_docs  # noqa: E402
+import curate_navigator  # noqa: E402
 import strip_availability  # noqa: E402
 
 
@@ -1059,6 +1060,10 @@ class MergeArchives(unittest.TestCase):
         self.assertIn("--synthesized-landing-page-topics-style", cmd)
         style_idx = cmd.index("--synthesized-landing-page-topics-style") + 1
         self.assertEqual(cmd[style_idx], "list")
+
+        self.assertIn("--synthesized-landing-page-kind", cmd)
+        kind_idx = cmd.index("--synthesized-landing-page-kind") + 1
+        self.assertEqual(cmd[kind_idx], "Project")
 
     def test_landing_page_name_uses_version_verbatim(self):
         cmd = self._capture_merge_cmd("main")
