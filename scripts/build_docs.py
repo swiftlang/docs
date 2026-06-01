@@ -884,6 +884,31 @@ def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prio
     return ["combined-merge", "static-hosting-transform"], []
 
 
+def assemble_in_source_order(results_by_index, num_sources):
+    """Flatten per-source build results into strict sources.json order.
+
+    `results_by_index` maps a source's position in sources.json to its
+    (archives, manifest_entry) result. Build order may differ from source
+    order (archive-type sources are built first for fail-fast), so this
+    reassembles by ascending index to guarantee the merge — and the manifest
+    — follow sources.json exactly. Indices with no result (skipped or failed
+    sources) are omitted. A source's archives stay grouped and in the order
+    build_source returned them (e.g. multi-target packages).
+
+    Returns (all_archives, manifest_entries).
+    """
+    all_archives = []
+    manifest_entries = []
+    for i in range(num_sources):
+        result = results_by_index.get(i)
+        if result is None:
+            continue
+        archives, entry = result
+        all_archives.extend(archives)
+        manifest_entries.append(entry)
+    return all_archives, manifest_entries
+
+
 def write_manifest(output_dir, version, entries):
     """Write build-manifest.json to the output directory."""
     manifest = {
@@ -969,15 +994,14 @@ def main():
     # Track results
     succeeded = []
     failed = []
-    all_archives = []
-    manifest_entries = []
+    results_by_index = {}
 
-    # Preflight: fetch archive-type sources first so network or extraction
-    # failures abort the run before any slow git clones or swift builds.
-    archive_sources = [s for s in sources if s["type"] == "archive"]
-    other_sources = [s for s in sources if s["type"] != "archive"]
-
-    def attempt_build(source, fatal=(), recoverable=()):
+    # Build archive-type sources first so network or extraction failures abort
+    # the run before any slow git clones or swift builds. Build order is
+    # decoupled from merge order: each result is keyed by the source's position
+    # in sources.json, then reassembled in that order below so the merge — and
+    # the manifest — strictly follow sources.json regardless of build order.
+    def attempt_build(index, source, fatal=(), recoverable=()):
         """Run build_source for one entry, sorting exceptions by severity.
 
         `fatal` exceptions print and sys.exit(1). `recoverable` exceptions are
@@ -1001,13 +1025,18 @@ def main():
             failed.append(sid)
             return
         succeeded.append(sid)
-        all_archives.extend(archives)
-        manifest_entries.append(entry)
+        results_by_index[index] = (archives, entry)
 
-    for source in archive_sources:
-        attempt_build(source, fatal=(ArchiveFetchError,))
-    for source in other_sources:
-        attempt_build(source, recoverable=(Exception,))
+    for i, source in enumerate(sources):
+        if source["type"] == "archive":
+            attempt_build(i, source, fatal=(ArchiveFetchError,))
+    for i, source in enumerate(sources):
+        if source["type"] != "archive":
+            attempt_build(i, source, recoverable=(Exception,))
+
+    all_archives, manifest_entries = assemble_in_source_order(
+        results_by_index, len(sources)
+    )
 
     # When --only is used, copy the single source's archive to output directly
     if args.only and all_archives:

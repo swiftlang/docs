@@ -1248,5 +1248,60 @@ class CleanPackageBuildDirs(unittest.TestCase):
             self.assertEqual(removed, [])
 
 
+class AssembleInSourceOrder(unittest.TestCase):
+    """assemble_in_source_order flattens build results into sources.json order."""
+
+    def test_orders_by_source_index_not_build_order(self):
+        # Built in build order (archive index 1 first), but expect source order.
+        results_by_index = {
+            1: (["archive-1.doccarchive"], {"id": "stdlib"}),
+            0: (["archive-0.doccarchive"], {"id": "book"}),
+        }
+        archives, entries = build_docs.assemble_in_source_order(
+            results_by_index, num_sources=2
+        )
+        self.assertEqual(archives, ["archive-0.doccarchive", "archive-1.doccarchive"])
+        self.assertEqual(entries, [{"id": "book"}, {"id": "stdlib"}])
+
+    def test_multi_target_archives_stay_grouped_and_ordered(self):
+        results_by_index = {
+            0: (["a.doccarchive"], {"id": "book"}),
+            1: (
+                ["spm-A.doccarchive", "spm-B.doccarchive", "spm-C.doccarchive"],
+                {"id": "swiftpm"},
+            ),
+        }
+        archives, entries = build_docs.assemble_in_source_order(
+            results_by_index, num_sources=2
+        )
+        self.assertEqual(
+            archives,
+            [
+                "a.doccarchive",
+                "spm-A.doccarchive",
+                "spm-B.doccarchive",
+                "spm-C.doccarchive",
+            ],
+        )
+        self.assertEqual(entries, [{"id": "book"}, {"id": "swiftpm"}])
+
+    def test_skips_missing_indices(self):
+        # Source at index 1 failed to build and has no result entry.
+        results_by_index = {
+            0: (["a.doccarchive"], {"id": "book"}),
+            2: (["c.doccarchive"], {"id": "testing"}),
+        }
+        archives, entries = build_docs.assemble_in_source_order(
+            results_by_index, num_sources=3
+        )
+        self.assertEqual(archives, ["a.doccarchive", "c.doccarchive"])
+        self.assertEqual(entries, [{"id": "book"}, {"id": "testing"}])
+
+    def test_empty_results(self):
+        archives, entries = build_docs.assemble_in_source_order({}, num_sources=3)
+        self.assertEqual(archives, [])
+        self.assertEqual(entries, [])
+
+
 if __name__ == "__main__":
     unittest.main()
