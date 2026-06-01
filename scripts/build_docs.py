@@ -781,7 +781,7 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
     return archives, manifest_entry
 
 
-def merge_archives(archives, output_path, docc_cmd):
+def merge_archives(archives, output_path, docc_cmd, landing_page_name):
     """Merge multiple .doccarchive directories into one using docc merge."""
     if output_path.exists():
         shutil.rmtree(str(output_path))
@@ -792,6 +792,8 @@ def merge_archives(archives, output_path, docc_cmd):
 
     cmd = docc_cmd + ["merge"] + [str(a) for a in archives] + [
         "--output-path", str(output_path),
+        "--synthesized-landing-page-name", landing_page_name,
+        "--synthesized-landing-page-topics-style", "list",
     ]
     subprocess.run(cmd, check=True)
     print(f"Combined archive: {output_path}")
@@ -865,7 +867,10 @@ def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prio
 
     combined_output = output_dir / f"{version}"
     try:
-        merge_archives(all_archives, combined_output, docc_cmd)
+        merge_archives(
+            all_archives, combined_output, docc_cmd,
+            landing_page_name=f"Swift - {version}",
+        )
     except subprocess.CalledProcessError:
         print("Error: docc merge failed")
         return [], ["combined-merge"]

@@ -1028,6 +1028,44 @@ class CollectGitMetadata(unittest.TestCase):
         self.assertEqual(commit, "unknown")
 
 
+class MergeArchives(unittest.TestCase):
+    def _capture_merge_cmd(self, version):
+        """Run merge_archives with a stubbed subprocess and return the cmd."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+            output = tmp_path / version
+            captured = {}
+
+            def fake_run(cmd, **kw):
+                captured["cmd"] = cmd
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                build_docs.merge_archives(
+                    [archive], output, ["docc"],
+                    landing_page_name=f"Swift - {version}",
+                )
+            return captured["cmd"]
+
+    def test_passes_landing_page_name_and_list_style(self):
+        cmd = self._capture_merge_cmd("6.2")
+
+        self.assertIn("--synthesized-landing-page-name", cmd)
+        name_idx = cmd.index("--synthesized-landing-page-name") + 1
+        self.assertEqual(cmd[name_idx], "Swift - 6.2")
+
+        self.assertIn("--synthesized-landing-page-topics-style", cmd)
+        style_idx = cmd.index("--synthesized-landing-page-topics-style") + 1
+        self.assertEqual(cmd[style_idx], "list")
+
+    def test_landing_page_name_uses_version_verbatim(self):
+        cmd = self._capture_merge_cmd("main")
+        name_idx = cmd.index("--synthesized-landing-page-name") + 1
+        self.assertEqual(cmd[name_idx], "Swift - main")
+
+
 class FinalizeCombinedArchive(unittest.TestCase):
     def test_prior_failures_skip_merge(self):
         succeeded, failed = build_docs._finalize_combined_archive(
