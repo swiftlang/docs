@@ -835,7 +835,48 @@ def transform_static_hosting(archive_path, hosting_base_path, docc_cmd):
     print(f"Transformed archive: {archive_path}")
 
 
-def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prior_failed):
+def inject_custom_templates_into_stubs(archive_path, common_dir):
+    """Inject custom-header/custom-footer templates into per-route index.html stubs.
+
+    Workaround for swiftlang/swift-docc#1532. `docc process-archive
+    transform-for-static-hosting` regenerates a stripped index.html for every
+    route under the archive, and those stubs do not include the
+    `<template id="custom-header">` / `<template id="custom-footer">` blocks
+    that `docc convert`/`docc merge` baked into the archive root. Without
+    this fix, only the archive-root index.html displays the custom header and
+    footer; every other route is served by a stub that lacks them.
+
+    Walks every index.html under archive_path except the root, skips any file
+    that already contains custom-header (idempotent — and self-disabling once
+    DocC fixes the upstream bug), and inserts both template blocks immediately
+    after `<body data-color-scheme="auto">` to mirror the placement
+    docc convert produces in the root. Returns the number of stubs patched.
+    """
+    header = (common_dir / "header.html").read_text()
+    footer = (common_dir / "footer.html").read_text()
+    anchor = '<body data-color-scheme="auto">'
+    # Mirror docc convert ordering: footer template first, then header.
+    injection = (
+        anchor
+        + f'<template id="custom-footer">{footer}</template>'
+        + f'<template id="custom-header">{header}</template>'
+    )
+
+    archive_path = Path(archive_path)
+    root_index = (archive_path / "index.html").resolve()
+    patched = 0
+    for index_path in archive_path.rglob("index.html"):
+        if index_path.resolve() == root_index:
+            continue
+        text = index_path.read_text()
+        if "custom-header" in text or anchor not in text:
+            continue
+        index_path.write_text(text.replace(anchor, injection, 1))
+        patched += 1
+    return patched
+
+
+def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prior_failed, common_dir=None):
     """Merge per-source archives and apply the static-hosting transform.
 
     Returns (succeeded_steps, failed_steps): names that should be added to
@@ -881,6 +922,11 @@ def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prio
     except subprocess.CalledProcessError:
         print("Error: docc process-archive transform-for-static-hosting failed")
         return ["combined-merge"], ["static-hosting-transform"]
+
+    # Workaround for swiftlang/swift-docc#1532 — drop this when fixed.
+    if common_dir is not None:
+        patched = inject_custom_templates_into_stubs(combined_output, common_dir)
+        print(f"Patched custom-header/footer into {patched} per-route stub(s).")
 
     return ["combined-merge", "static-hosting-transform"], []
 
@@ -1051,7 +1097,8 @@ def main():
     # Merge all archives — only when building everything (not --only)
     if all_archives and not args.only:
         s_steps, f_steps = _finalize_combined_archive(
-            all_archives, output_dir, version, tools.docc, failed
+            all_archives, output_dir, version, tools.docc, failed,
+            common_dir=common_dir,
         )
         succeeded.extend(s_steps)
         failed.extend(f_steps)

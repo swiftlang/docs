@@ -1168,6 +1168,117 @@ class FinalizeCombinedArchive(unittest.TestCase):
         self.assertEqual(failed, [])
 
 
+class InjectCustomTemplatesIntoStubs(unittest.TestCase):
+    """Workaround for swiftlang/swift-docc#1532: see build_docs function docstring."""
+
+    ANCHOR = '<body data-color-scheme="auto">'
+
+    def _make_archive(self, root, header_text, footer_text):
+        """Build a fake archive tree with a templated root and stripped subroute stubs."""
+        archive = root / "main"
+        archive.mkdir()
+        # Common templates the function reads from.
+        common = root / "common"
+        common.mkdir()
+        (common / "header.html").write_text(header_text)
+        (common / "footer.html").write_text(footer_text)
+        # Root index.html already contains the templates (from docc convert/merge).
+        root_index = archive / "index.html"
+        root_index.write_text(
+            f'<!doctype html><html><body data-color-scheme="auto">'
+            f'<template id="custom-footer">{footer_text}</template>'
+            f'<template id="custom-header">{header_text}</template>'
+            f'<div id="app"></div></body></html>'
+        )
+        # Stripped subroute stubs from transform-for-static-hosting.
+        for sub in (
+            "documentation/index.html",
+            "documentation/foo/index.html",
+            "documentation/foo/bar/index.html",
+            "tutorials/baz/index.html",
+        ):
+            sub_path = archive / sub
+            sub_path.parent.mkdir(parents=True, exist_ok=True)
+            sub_path.write_text(
+                '<!doctype html><html><body data-color-scheme="auto">'
+                '<div id="app"></div></body></html>'
+            )
+        return archive, common
+
+    def test_patches_subroute_stubs_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive, common = self._make_archive(Path(tmp), "HDR", "FTR")
+            patched = build_docs.inject_custom_templates_into_stubs(archive, common)
+            self.assertEqual(patched, 4)
+            for sub in (
+                "documentation/index.html",
+                "documentation/foo/index.html",
+                "documentation/foo/bar/index.html",
+                "tutorials/baz/index.html",
+            ):
+                text = (archive / sub).read_text()
+                self.assertIn('<template id="custom-header">HDR</template>', text)
+                self.assertIn('<template id="custom-footer">FTR</template>', text)
+
+    def test_root_index_is_left_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive, common = self._make_archive(Path(tmp), "HDR", "FTR")
+            before = (archive / "index.html").read_text()
+            build_docs.inject_custom_templates_into_stubs(archive, common)
+            self.assertEqual((archive / "index.html").read_text(), before)
+
+    def test_idempotent_when_run_twice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive, common = self._make_archive(Path(tmp), "HDR", "FTR")
+            first = build_docs.inject_custom_templates_into_stubs(archive, common)
+            after_first = {
+                sub: (archive / sub).read_text()
+                for sub in ("documentation/index.html", "tutorials/baz/index.html")
+            }
+            second = build_docs.inject_custom_templates_into_stubs(archive, common)
+            self.assertEqual(first, 4)
+            self.assertEqual(second, 0)
+            for sub, text in after_first.items():
+                self.assertEqual((archive / sub).read_text(), text)
+
+    def test_skips_files_without_anchor(self):
+        """If DocC ever fixes #1532 and emits a different shell shape, leave it alone."""
+        with tempfile.TemporaryDirectory() as tmp:
+            archive, common = self._make_archive(Path(tmp), "HDR", "FTR")
+            no_anchor = archive / "documentation" / "no-anchor" / "index.html"
+            no_anchor.parent.mkdir(parents=True, exist_ok=True)
+            original = "<!doctype html><html><body><div id=\"app\"></div></body></html>"
+            no_anchor.write_text(original)
+            build_docs.inject_custom_templates_into_stubs(archive, common)
+            self.assertEqual(no_anchor.read_text(), original)
+
+    def test_no_subroute_stubs_returns_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "main"
+            archive.mkdir()
+            (archive / "index.html").write_text(
+                '<body data-color-scheme="auto">'
+                '<template id="custom-header">HDR</template>'
+                '<template id="custom-footer">FTR</template></body>'
+            )
+            common = Path(tmp) / "common"
+            common.mkdir()
+            (common / "header.html").write_text("HDR")
+            (common / "footer.html").write_text("FTR")
+            patched = build_docs.inject_custom_templates_into_stubs(archive, common)
+            self.assertEqual(patched, 0)
+
+    def test_template_ordering_matches_docc_convert(self):
+        """custom-footer comes before custom-header — same order docc convert emits."""
+        with tempfile.TemporaryDirectory() as tmp:
+            archive, common = self._make_archive(Path(tmp), "HDR", "FTR")
+            build_docs.inject_custom_templates_into_stubs(archive, common)
+            text = (archive / "documentation" / "index.html").read_text()
+            footer_pos = text.index('<template id="custom-footer">')
+            header_pos = text.index('<template id="custom-header">')
+            self.assertLess(footer_pos, header_pos)
+
+
 class CleanPackageBuildDirs(unittest.TestCase):
     def test_removes_build_dir_for_local_source(self):
         with tempfile.TemporaryDirectory() as tmp:
