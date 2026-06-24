@@ -2,12 +2,13 @@
   "version": 1,
   "groups": [
     {
-      "title": "The Swift Language",
+      "title": "Essential Libraries",
       "modules": [
-        { "source": "swift-stdlib", "path": "/documentation/swift" },
         { "source": "swift-book", "path": "/documentation/the-swift-programming-language" },
+        { "source": "swift-stdlib", "path": "/documentation/swift" },
         { "source": "swift-migration-guide", "path": "/documentation/migrationguide" },
-        { "source": "compiler-diagnostics", "path": "/documentation/diagnostics" }
+        { "source": "compiler-diagnostics", "path": "/documentation/diagnostics" },
+        { "source": "swift-testing", "path": "/documentation/testing" }
       ]
     },
     {
@@ -16,12 +17,6 @@
         { "source": "swiftpm", "path": "/documentation/packagemanagerdocs", "title": "Swift Package Manager" },
         { "source": "swiftpm", "path": "/documentation/packagedescription" },
         { "source": "swiftpm", "path": "/documentation/packageplugin" }
-      ]
-    },
-    {
-      "title": "Testing",
-      "modules": [
-        { "source": "swift-testing", "path": "/documentation/testing" }
       ]
     },
     {
