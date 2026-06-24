@@ -15,7 +15,8 @@ jobs:
     name: Build combined documentation
     runs-on: ubuntu-latest
     container:
-      image: swiftlang/swift:nightly-main-jammy
+      image: swift:6.3
+      # image: swiftlang/swift:nightly-main-jammy
     steps:
       - uses: actions/checkout@v6
 
