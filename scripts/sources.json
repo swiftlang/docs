@@ -36,7 +36,7 @@
       "id": "swiftpm",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-package-manager.git",
-      "ref": "main",
+      "ref": "release/6.3",
       "targets": ["PackageManagerDocs", "PackageDescription", "PackagePlugin"]
     },
     {
