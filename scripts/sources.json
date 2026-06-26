@@ -43,7 +43,7 @@
       "id": "swift-testing",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-testing.git",
-      "ref": "main",
+      "ref": "release/6.3",
       "targets": ["Testing"],
       "add_docc_plugin": true
     },

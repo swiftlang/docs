@@ -77,6 +77,13 @@ def parse_args():
         default=None,
         help="Build only a specific source by id",
     )
+    parser.add_argument(
+        "--extra-hosting-prefix",
+        default=None,
+        metavar="PREFIX",
+        help="Prepend a path segment to the hosting base path (e.g. 'docs' → 'docs/main'). "
+             "Does not affect the output directory name or landing page title.",
+    )
     return parser.parse_args()
 
 
@@ -503,7 +510,6 @@ def fetch_archive(source, workspace):
     print(f"Found {docc_archive_name} at {archive_path}")
     return archive_path
 
-
 def find_docc_catalog_for_target(source_dir, target, swift_cmd):
     """Discover the .docc catalog directory for a Swift package target.
 
@@ -877,7 +883,7 @@ def inject_custom_templates_into_stubs(archive_path, common_dir):
     return patched
 
 
-def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prior_failed, common_dir=None, navigation=None):
+def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prior_failed, common_dir=None, navigation=None, hosting_base_path=None):
     """Merge per-source archives and apply the static-hosting transform.
 
     Returns (succeeded_steps, failed_steps): names that should be added to
@@ -928,7 +934,7 @@ def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prio
             return ["combined-merge"], ["navigator-curation"]
 
     try:
-        transform_static_hosting(combined_output, version, docc_cmd)
+        transform_static_hosting(combined_output, hosting_base_path or version, docc_cmd)
     except subprocess.CalledProcessError:
         print("Error: docc process-archive transform-for-static-hosting failed")
         curated = ["combined-merge"]
@@ -1053,6 +1059,7 @@ def main():
         print("No navigation.json found — combined navigator will not be curated.")
 
     version = config["version"]
+    hosting_base_path = f"{args.extra_hosting_prefix}/{version}" if args.extra_hosting_prefix else version
     sources = config["sources"]
 
     # Ensure consistent, pretty-printed DocC JSON output
@@ -1135,6 +1142,7 @@ def main():
         s_steps, f_steps = _finalize_combined_archive(
             all_archives, output_dir, version, tools.docc, failed,
             common_dir=common_dir, navigation=navigation,
+            hosting_base_path=hosting_base_path,
         )
         succeeded.extend(s_steps)
         failed.extend(f_steps)
