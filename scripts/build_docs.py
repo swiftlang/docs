@@ -17,7 +17,6 @@
 import argparse
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -95,25 +94,16 @@ def check_prerequisites():
             sys.exit(1)
 
 
-Tools = namedtuple("Tools", ["swiftly", "swift", "docc"])
+Tools = namedtuple("Tools", ["swift", "docc"])
 
 
 def discover_tools():
     """Discover the swift toolchain commands available in PATH.
 
-    Returns a `Tools` triple of command prefixes (each a list; empty when
-    unavailable). When swiftly is present, all three route through it so
-    `.swift-version` files are honored at command-resolution time. Otherwise
-    swift comes directly from PATH, and docc is located via `xcrun --find`
-    on macOS with a fallback to PATH.
+    Returns a `Tools` pair of command prefixes (each a list; empty when
+    unavailable). swift comes directly from PATH, and docc is located via
+    `xcrun --find` on macOS with a fallback to PATH.
     """
-    if shutil.which("swiftly"):
-        return Tools(
-            swiftly=["swiftly"],
-            swift=["swiftly", "run", "swift"],
-            docc=["swiftly", "run", "docc"],
-        )
-
     swift = ["swift"] if shutil.which("swift") else []
 
     docc = []
@@ -129,145 +119,7 @@ def discover_tools():
     if not docc and shutil.which("docc"):
         docc = ["docc"]
 
-    return Tools(swiftly=[], swift=swift, docc=docc)
-
-
-def ensure_toolchain_installed(source_dir, swiftly_cmd):
-    """Pre-install the toolchain pinned by `.swift-version`, if any.
-
-    Walks no directories — only checks for `.swift-version` directly in
-    source_dir. swiftly itself walks parents at command-resolution time, but
-    we only auto-install when the source root explicitly pins a version.
-    No-op when swiftly is unavailable or no version file is present.
-    """
-    if not swiftly_cmd:
-        return
-    if not (source_dir / ".swift-version").is_file():
-        return
-    print(f"Ensuring pinned toolchain is installed (swiftly install)...")
-    subprocess.run(
-        swiftly_cmd + ["install", "--assume-yes"],
-        cwd=str(source_dir),
-        check=True,
-    )
-
-
-_TOOLS_VERSION_RE = re.compile(
-    r"^//\s*swift-tools-version\s*:\s*(\d+(?:\.\d+){0,2})"
-)
-
-_SWIFT_VERSION_RE = re.compile(r"Swift version (\d+)\.(\d+)")
-
-
-def get_active_swift_version():
-    """Return the active swift toolchain as (major, minor), or None.
-
-    Runs `swift --version` and parses the version line. When swiftly is
-    installed, `swift` is its proxy and reports the active toolchain;
-    otherwise this reports the system swift. Returns None if swift is
-    unavailable, the invocation fails, or the output can't be parsed.
-    """
-    if shutil.which("swift") is None:
-        return None
-    try:
-        result = subprocess.run(
-            ["swift", "--version"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, OSError):
-        return None
-    m = _SWIFT_VERSION_RE.search(result.stdout)
-    if not m:
-        return None
-    return (int(m.group(1)), int(m.group(2)))
-
-
-def select_swift_toolchain(swift_cmd, source_dir, swiftly_cmd, active_swift_version):
-    """Decide whether to pin a specific swiftly toolchain for this source.
-
-    Package.swift's `swift-tools-version` declares a *minimum* toolchain. If
-    the active toolchain already meets that minimum, the default is fine and
-    we leave swift_cmd alone. Only when the active toolchain is older (or
-    unknown) do we install the required version and pin via `+X.Y`.
-
-    Returns swift_cmd unchanged when:
-      - swiftly is unavailable
-      - source_dir has a `.swift-version` file (handled by
-        ensure_toolchain_installed; that path takes precedence)
-      - Package.swift has no recognizable tools-version line
-      - active_swift_version >= the tools-version
-
-    Otherwise installs the tools-version via swiftly and returns
-    swift_cmd + ['+X.Y']. If installation fails, returns swift_cmd unchanged
-    so the build can proceed against whatever's available.
-    """
-    if not swiftly_cmd:
-        return swift_cmd
-    if (source_dir / ".swift-version").is_file():
-        return swift_cmd
-    tools_version = read_swift_tools_version(source_dir)
-    if not tools_version:
-        return swift_cmd
-
-    parts = tools_version.split(".")
-    try:
-        required = (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
-    except ValueError:
-        return swift_cmd
-
-    if active_swift_version is not None and active_swift_version >= required:
-        print(
-            f"Active swift toolchain {active_swift_version[0]}."
-            f"{active_swift_version[1]} satisfies Package.swift requirement "
-            f"{tools_version}; using default."
-        )
-        return swift_cmd
-
-    print(
-        f"Package.swift requires swift-tools-version {tools_version}; "
-        f"using `swiftly +{tools_version}`."
-    )
-    try:
-        subprocess.run(
-            swiftly_cmd + ["install", tools_version, "--assume-yes"],
-            check=True,
-        )
-    except subprocess.CalledProcessError as e:
-        print(
-            f"  Note: `swiftly install {tools_version}` failed ({e}); "
-            "continuing with default toolchain."
-        )
-        return swift_cmd
-    return swift_cmd + [f"+{tools_version}"]
-
-
-def read_swift_tools_version(source_dir):
-    """Parse the `// swift-tools-version:` declaration in Package.swift.
-
-    Returns the version as a major.minor string (e.g. "6.3" or "5.10"),
-    stripping any patch component. Returns None if Package.swift is missing,
-    empty, or doesn't have a recognizable tools-version line.
-
-    Used as a fallback selector for swiftly when a source has no
-    `.swift-version` file but its Package.swift declares a minimum toolchain.
-    """
-    package_swift = Path(source_dir) / "Package.swift"
-    if not package_swift.is_file():
-        return None
-    try:
-        text = package_swift.read_text()
-    except OSError:
-        return None
-    if not text:
-        return None
-    first_line = text.splitlines()[0]
-    m = _TOOLS_VERSION_RE.match(first_line)
-    if not m:
-        return None
-    parts = m.group(1).split(".")
-    return ".".join(parts[:2]) if len(parts) >= 2 else parts[0]
+    return Tools(swift=swift, docc=docc)
 
 
 def validate_sources(config):
@@ -510,7 +362,7 @@ def fetch_archive(source, workspace):
     print(f"Found {docc_archive_name} at {archive_path}")
     return archive_path
 
-def find_docc_catalog_for_target(source_dir, target, swift_cmd):
+def find_docc_catalog_for_target(source_dir, target):
     """Discover the .docc catalog directory for a Swift package target.
 
     Uses `swift package describe --type json` to find the target's source path,
@@ -518,7 +370,7 @@ def find_docc_catalog_for_target(source_dir, target, swift_cmd):
     """
     try:
         result = subprocess.run(
-            swift_cmd + ["package", "describe", "--type", "json"],
+            ["swift", "package", "describe", "--type", "json"],
             cwd=str(source_dir),
             capture_output=True,
             text=True,
@@ -621,7 +473,7 @@ def _build_package_targets(source, source_dir, common_dir, temp_archive_dir, swi
     extra_flags = source.get("extra_flags", [])
 
     for target in targets:
-        catalog_dir = find_docc_catalog_for_target(source_dir, target, swift_cmd)
+        catalog_dir = find_docc_catalog_for_target(source_dir, target)
         if catalog_dir:
             install_templates(catalog_dir, common_dir, f"{source_id}/{target}")
         else:
@@ -714,7 +566,7 @@ def _collect_git_metadata(source_dir, configured_ref=None):
         return "unknown", "unknown"
 
 
-def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc_cmd, env, swift_cmd=None, swiftly_cmd=None, active_swift_version=None):
+def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc_cmd, env, swift_cmd=None):
     """Build a single source entry.
 
     Returns (archives, manifest_entry) on success. Dispatches to a helper for
@@ -723,8 +575,6 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
     """
     if swift_cmd is None:
         swift_cmd = ["swift"]
-    if swiftly_cmd is None:
-        swiftly_cmd = []
 
     source_id = source["id"]
     source_type = source["type"]
@@ -749,11 +599,6 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
         source_dir = clone_or_update(source, workspace, source["ref"])
     else:
         raise RuntimeError(f"unknown type '{source_type}'")
-
-    ensure_toolchain_installed(source_dir, swiftly_cmd)
-    swift_cmd = select_swift_toolchain(
-        swift_cmd, source_dir, swiftly_cmd, active_swift_version
-    )
 
     preflight = source.get("preflight", "")
     if preflight:
@@ -1003,14 +848,6 @@ def main():
 
     check_prerequisites()
     tools = discover_tools()
-    active_swift_version = get_active_swift_version()
-    if tools.swiftly:
-        print("swiftly detected — swift and docc invocations will honor .swift-version files.")
-    if active_swift_version:
-        print(
-            f"Active swift toolchain: "
-            f"{active_swift_version[0]}.{active_swift_version[1]}"
-        )
 
     # Validate common template files exist
     for tmpl in TEMPLATE_FILES:
@@ -1104,8 +941,7 @@ def main():
             archives, entry = build_source(
                 source, root_dir, workspace, common_dir,
                 temp_archive_dir, tools.docc, env,
-                swift_cmd=tools.swift, swiftly_cmd=tools.swiftly,
-                active_swift_version=active_swift_version,
+                swift_cmd=tools.swift,
             )
         except fatal as e:
             print(f"Fatal: {e}")
