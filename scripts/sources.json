@@ -101,6 +101,13 @@
       "repo": "https://github.com/swiftlang/swiftly.git",
       "ref": "main",
       "targets": ["SwiftlyDocs"]
+    },
+    {
+      "id": "swift-java",
+      "type": "git",
+      "repo": "https://github.com/swiftlang/swift-java.git",
+      "ref": "main",
+      "targets": ["SwiftJavaDocumentation"]
     }
   ]
 }

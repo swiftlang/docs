@@ -41,6 +41,12 @@
         { "source": "server-guides", "path": "/documentation/serverguides" },
         { "source": "swift-server-todos-tutorial", "path": "/tutorials/getting-started-swift-server" }
       ]
+    },
+    {
+      "title": "Interoperability",
+      "modules": [
+        { "source": "swift-java", "path": "/documentation/swiftjavadocumentation", "title": "Swift and Java" }
+      ]
     }
   ],
   "hidden": [
