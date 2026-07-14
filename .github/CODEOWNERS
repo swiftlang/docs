@@ -13,6 +13,6 @@
 CODEOWNERS @heckj @shahmishal 
 
 /api-guidelines/ @swiftlang/language-steering-group
-/ecosystem-tools/ @swiftlang/ecosystem-steering-group
+/best-practices/ @swiftlang/ecosystem-steering-group
 /language-guides/ @swiftlang/language-steering-group
 /server-guides/ @swiftlang/server-workgroup

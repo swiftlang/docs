@@ -33,6 +33,12 @@
       "extra_flags": ["--allow-arbitrary-catalog-directories"]
     },
     {
+      "id": "best-practices",
+      "type": "local",
+      "path": "best-practices",
+      "targets": ["BestPractices"]
+    },
+    {
       "id": "swiftpm",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-package-manager.git",
