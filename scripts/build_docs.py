@@ -46,6 +46,12 @@ DOCC_BUILD_FLAGS = [
     "--experimental-enable-custom-templates",
     "--enable-mentioned-in",
     "--enable-experimental-external-link-support",
+    # Emit a markdown copy of every rendered document (plus a manifest) under
+    # data/documentation/. These sidecar files survive docc merge and
+    # process-archive transform-for-static-hosting, so they reach the published
+    # combined archive for consumption by crawlers and other tooling.
+    "--enable-experimental-markdown-output",
+    "--enable-experimental-markdown-output-manifest",
 ]
 
 # Common template files to copy into each .docc catalog before building
