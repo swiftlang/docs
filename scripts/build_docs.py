@@ -197,7 +197,7 @@ def validate_sources(config):
                 )
             disallowed_for_archive = (
                 "targets", "docc_catalog", "path", "repo", "ref",
-                "preflight", "add_docc_plugin", "extra_flags",
+                "preflight", "add_docc_plugin", "extra_flags", "env",
             )
             for field in disallowed_for_archive:
                 if field in entry:
@@ -232,6 +232,23 @@ def validate_sources(config):
 
         if "preflight" in entry and not entry["preflight"]:
             errors.append(f"{label} has 'preflight' but it is empty")
+
+        if "env" in entry:
+            env_val = entry["env"]
+            if not isinstance(env_val, dict):
+                errors.append(
+                    f"{label} 'env' must be an object mapping names to values "
+                    f"(got {type(env_val).__name__})"
+                )
+            else:
+                for key, value in env_val.items():
+                    if not isinstance(key, str) or not key:
+                        errors.append(f"{label} 'env' has non-string or empty key")
+                    if not isinstance(value, (str, int, float, bool)):
+                        errors.append(
+                            f"{label} 'env[{key}]' must be a string, number, or bool "
+                            f"(got {type(value).__name__})"
+                        )
 
     return errors
 
@@ -599,6 +616,13 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
         source_dir = clone_or_update(source, workspace, source["ref"])
     else:
         raise RuntimeError(f"unknown type '{source_type}'")
+
+    source_env = source.get("env")
+    if source_env:
+        env = env.copy()
+        for key, value in source_env.items():
+            env[key] = str(value)
+        print(f"Source env overrides: {', '.join(sorted(source_env))}")
 
     preflight = source.get("preflight", "")
     if preflight:

@@ -107,7 +107,10 @@
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-java.git",
       "ref": "main",
-      "targets": ["SwiftJavaDocumentation"]
+      "targets": ["SwiftJavaDocumentation"],
+      "env": {
+        "SWIFTJAVA_DOCC_PLUGIN_INSTALL": "1"
+      }
     }
   ]
 }
