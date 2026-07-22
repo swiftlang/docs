@@ -5,8 +5,7 @@
       "title": "Swift",
       "modules": [
         { "source": "swift-book", "path": "/documentation/the-swift-programming-language" },
-        { "source": "compiler-diagnostics", "path": "/documentation/diagnostics" },
-        { "source": "swift-migration-guide", "path": "/documentation/migrationguide" }
+        { "source": "compiler-diagnostics", "path": "/documentation/diagnostics" }
        ]
     },
     {
@@ -32,12 +31,7 @@
       "modules": [
         { "source": "embedded-swift", "path": "/documentation/embeddedswift" },
         { "source": "swift-wasm", "path": "/documentation/wasmguide" },
-        { "source": "swift-android", "path": "/documentation/swiftandroid" }
-      ]
-    },
-    {
-      "title": "Server-Side Swift",
-      "modules": [
+        { "source": "swift-android", "path": "/documentation/swiftandroid" },
         { "source": "server-guides", "path": "/documentation/serverguides" },
         { "source": "swift-server-todos-tutorial", "path": "/tutorials/getting-started-swift-server" }
       ]
@@ -46,6 +40,12 @@
       "title": "Interoperability",
       "modules": [
         { "source": "swift-java", "path": "/documentation/swiftjavadocumentation", "title": "Swift and Java" }
+      ]
+    },
+    {
+      "title": "Releases",
+      "modules": [
+        { "source": "swift-migration-guide", "path": "/documentation/migrationguide" }
       ]
     }
   ],
