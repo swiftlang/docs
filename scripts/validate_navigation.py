@@ -60,14 +60,17 @@ def _load_json(path):
 def _auto_archive(sources, sources_path):
     """Return the conventional combined archive path if it exists, else None.
 
-    Resolved relative to sources.json (…/<dir>/../.build-output/<version>), so
+    Resolved relative to sources.json (…/<dir>/../.build-output/<slug>), so
     pointing --sources at a throwaway file does not pick up the real build.
     """
     version = sources.get("version")
-    if not version:
+    if not isinstance(version, dict):
+        return None
+    slug = version.get("slug")
+    if not slug:
         return None
     repo_root = Path(sources_path).resolve().parent.parent
-    candidate = repo_root / ".build-output" / str(version)
+    candidate = repo_root / ".build-output" / slug
     return candidate if (candidate / "index" / "index.json").is_file() else None
 
 

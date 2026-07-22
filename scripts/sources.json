@@ -1,5 +1,8 @@
 {
-  "version": "main",
+  "version": {
+    "slug": "main",
+    "descriptive-name": "prototype"
+  },
   "sources": [
     {
       "id": "swift-book",

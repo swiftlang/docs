@@ -40,10 +40,11 @@ but be aware they will be stale if something else reads them.
 **All curation happens inside `.interfaceLanguages.swift[0].children[]`.**
 
 `swift[0]` is the synthesized root node — `{ "type": "module", "title":
-"Swift - main", "path": "/documentation", "children": [...] }` (the
-`--synthesized-landing-page-name`). Its **`children`** array holds **one
-`module` node per merged module**, in merge order. That array is the curation
-surface. (In the `main` build it has **36 entries** — see below.)
+"Swift Documentation", "path": "/documentation", "children": [...] }` (the
+`--synthesized-landing-page-name`, a fixed string independent of the build's
+`version`). Its **`children`** array holds **one `module` node per merged
+module**, in merge order. That array is the curation surface. (In the `main`
+build it has **36 entries** — see below.)
 
 ## The `Node` object
 

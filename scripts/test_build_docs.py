@@ -46,7 +46,49 @@ def _validate(config):
 
 
 def _wrap(entry):
-    return {"version": "main", "sources": [entry]}
+    return {
+        "version": {"slug": "main", "descriptive-name": "prototype"},
+        "sources": [entry],
+    }
+
+
+class ValidateVersionField(unittest.TestCase):
+    def _config(self, version):
+        return {
+            "version": version,
+            "sources": [{
+                "id": "stdlib",
+                "type": "archive",
+                "url": "https://example.com/Swift.doccarchive.tar.gz",
+                "docc_archive_name": "Swift.doccarchive",
+            }],
+        }
+
+    def test_valid_version_object(self):
+        output = _validate(self._config({"slug": "main", "descriptive-name": "prototype"}))
+        self.assertIsNone(output)
+
+    def test_version_missing_is_rejected(self):
+        config = self._config({"slug": "main", "descriptive-name": "prototype"})
+        del config["version"]
+        output = _validate(config)
+        self.assertIsNotNone(output)
+        self.assertIn("version", output)
+
+    def test_version_as_plain_string_is_rejected(self):
+        output = _validate(self._config("main"))
+        self.assertIsNotNone(output)
+        self.assertIn("version", output)
+
+    def test_version_missing_slug_is_rejected(self):
+        output = _validate(self._config({"descriptive-name": "prototype"}))
+        self.assertIsNotNone(output)
+        self.assertIn("slug", output)
+
+    def test_version_missing_descriptive_name_is_rejected(self):
+        output = _validate(self._config({"slug": "main"}))
+        self.assertIsNotNone(output)
+        self.assertIn("descriptive-name", output)
 
 
 class ValidateArchiveType(unittest.TestCase):
@@ -749,7 +791,7 @@ class MergeArchives(unittest.TestCase):
             with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
                 build_docs.merge_archives(
                     [archive], output, ["docc"],
-                    landing_page_name=f"Swift - {version}",
+                    landing_page_name="Swift Documentation",
                 )
             return captured["cmd"]
 
@@ -758,7 +800,7 @@ class MergeArchives(unittest.TestCase):
 
         self.assertIn("--synthesized-landing-page-name", cmd)
         name_idx = cmd.index("--synthesized-landing-page-name") + 1
-        self.assertEqual(cmd[name_idx], "Swift - 6.2")
+        self.assertEqual(cmd[name_idx], "Swift Documentation")
 
         self.assertIn("--synthesized-landing-page-topics-style", cmd)
         style_idx = cmd.index("--synthesized-landing-page-topics-style") + 1
@@ -768,10 +810,13 @@ class MergeArchives(unittest.TestCase):
         kind_idx = cmd.index("--synthesized-landing-page-kind") + 1
         self.assertEqual(cmd[kind_idx], "Project")
 
-    def test_landing_page_name_uses_version_verbatim(self):
-        cmd = self._capture_merge_cmd("main")
-        name_idx = cmd.index("--synthesized-landing-page-name") + 1
-        self.assertEqual(cmd[name_idx], "Swift - main")
+    def test_landing_page_name_is_version_independent(self):
+        cmd_main = self._capture_merge_cmd("main")
+        cmd_6_2 = self._capture_merge_cmd("6.2")
+        name_idx_main = cmd_main.index("--synthesized-landing-page-name") + 1
+        name_idx_6_2 = cmd_6_2.index("--synthesized-landing-page-name") + 1
+        self.assertEqual(cmd_main[name_idx_main], "Swift Documentation")
+        self.assertEqual(cmd_6_2[name_idx_6_2], "Swift Documentation")
 
 
 class FinalizeCombinedArchive(unittest.TestCase):
@@ -841,6 +886,29 @@ class FinalizeCombinedArchive(unittest.TestCase):
         self.assertEqual(succeeded, ["combined-merge"])
         self.assertEqual(failed, ["static-hosting-transform"])
 
+    def test_merge_uses_fixed_landing_page_name_regardless_of_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+
+            calls = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                out_idx = cmd.index("--output-path") + 1
+                Path(cmd[out_idx]).mkdir(parents=True, exist_ok=True)
+                raise subprocess.CalledProcessError(1, cmd)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                build_docs._finalize_combined_archive(
+                    [archive], tmp_path, "6.2", ["docc"], prior_failed=[]
+                )
+
+            merge_cmd = calls[0]
+            name_idx = merge_cmd.index("--synthesized-landing-page-name") + 1
+            self.assertEqual(merge_cmd[name_idx], "Swift Documentation")
+
     def test_full_success_records_both_steps(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -870,6 +938,44 @@ class FinalizeCombinedArchive(unittest.TestCase):
         self.assertEqual(succeeded, ["combined-merge", "static-hosting-transform"])
         self.assertEqual(failed, [])
 
+    def test_version_paragraph_written_to_landing_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+            captured = {}
+
+            def fake_run(cmd, **kw):
+                if "merge" in cmd:
+                    out_idx = cmd.index("--output-path") + 1
+                    out = Path(cmd[out_idx])
+                    out.mkdir(parents=True, exist_ok=True)
+                    (out / "index.html").write_text("merged")
+                    _write_landing_page(out, [("Modules", ["doc://Test/documentation/Swift"])])
+                    return subprocess.CompletedProcess(cmd, 0)
+                # transform-for-static-hosting: capture the landing page as it
+                # stood right before docc replaces the archive in place.
+                archive_arg = Path(cmd[cmd.index("transform-for-static-hosting") + 1])
+                captured["doc"] = json.loads(
+                    (archive_arg / "data" / "documentation.json").read_text()
+                )
+                out_idx = cmd.index("--output-path") + 1
+                out = Path(cmd[out_idx])
+                out.mkdir(parents=True, exist_ok=True)
+                (out / "index.html").write_text("transformed")
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                build_docs._finalize_combined_archive(
+                    [archive], tmp_path, "main", ["docc"], prior_failed=[],
+                    version={"slug": "main", "descriptive-name": "6.3"},
+                )
+
+        self.assertEqual(
+            captured["doc"]["primaryContentSections"][0]["content"][0]["inlineContent"][0]["text"],
+            "Swift version: 6.3",
+        )
+
     def _merge_writes_index(self, modules):
         """Build a fake subprocess.run that writes a merged index.json on merge.
 
@@ -887,7 +993,7 @@ class FinalizeCombinedArchive(unittest.TestCase):
                     "schemaVersion": {"major": 0, "minor": 1, "patch": 2},
                     "interfaceLanguages": {
                         "swift": [{
-                            "title": "Swift - main",
+                            "title": "Swift Documentation",
                             "children": [
                                 {"type": "module", "title": t, "path": p}
                                 for t, p in modules
@@ -1229,7 +1335,7 @@ def _make_index(tmp_path, children, langs=("swift",)):
         "interfaceLanguages": {
             lang: [
                 {
-                    "title": "Swift - main",
+                    "title": "Swift Documentation",
                     "children": [dict(c) for c in children],
                     "path": "/documentation",
                     "type": "module",
@@ -1248,7 +1354,10 @@ def _children_of(archive, lang="swift"):
 
 
 class ValidateNavigation(unittest.TestCase):
-    SOURCES = {"version": "main", "sources": [{"id": "a"}, {"id": "b"}]}
+    SOURCES = {
+        "version": {"slug": "main", "descriptive-name": "prototype"},
+        "sources": [{"id": "a"}, {"id": "b"}],
+    }
 
     def _nav(self, **over):
         nav = {
@@ -1470,6 +1579,46 @@ class CurateNavigatorDryRun(unittest.TestCase):
                 curate_navigator.dry_run(archive, self._nav())
 
 
+class AutoArchiveVersionSlug(unittest.TestCase):
+    """_auto_archive must resolve the {slug, descriptive-name} version object."""
+
+    def _sources_path(self, tmp_path):
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        return scripts_dir / "sources.json"
+
+    def test_uses_slug_from_version_object(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            sources_path = self._sources_path(tmp_path)
+            sources = {
+                "version": {"slug": "main", "descriptive-name": "prototype"},
+                "sources": [],
+            }
+            index_dir = tmp_path / ".build-output" / "main" / "index"
+            index_dir.mkdir(parents=True)
+            (index_dir / "index.json").write_text("{}")
+
+            found = validate_navigation_cli._auto_archive(sources, sources_path)
+            self.assertEqual(found, tmp_path.resolve() / ".build-output" / "main")
+
+    def test_missing_slug_returns_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            sources_path = self._sources_path(tmp_path)
+            sources = {
+                "version": {"descriptive-name": "prototype"},
+                "sources": [],
+            }
+            self.assertIsNone(validate_navigation_cli._auto_archive(sources, sources_path))
+
+    def test_version_missing_entirely_returns_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            sources_path = self._sources_path(tmp_path)
+            self.assertIsNone(validate_navigation_cli._auto_archive({"sources": []}, sources_path))
+
+
 class ValidateNavigationCLI(unittest.TestCase):
     def _setup(self, tmp, nav, sources, archive_modules=None):
         """Write nav + sources files (and optionally an archive); return argv."""
@@ -1484,7 +1633,10 @@ class ValidateNavigationCLI(unittest.TestCase):
             argv += ["--archive", str(archive)]
         return argv
 
-    SOURCES = {"version": "main", "sources": [{"id": "a"}, {"id": "b"}]}
+    SOURCES = {
+        "version": {"slug": "main", "descriptive-name": "prototype"},
+        "sources": [{"id": "a"}, {"id": "b"}],
+    }
 
     def _nav(self):
         return {
@@ -1719,6 +1871,54 @@ class CurateLandingPage(unittest.TestCase):
             curate_navigator.curate_navigator(archive, self._nav())
             twice = page.read_bytes()
         self.assertEqual(once, twice)
+
+
+class SetVersionParagraph(unittest.TestCase):
+    def test_adds_paragraph_content_section(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            _write_landing_page(archive, [("Modules", ["doc://Test/documentation/Swift"])])
+            curate_navigator.set_version_paragraph(archive, "Swift version: 6.3")
+            doc = json.loads((archive / "data" / "documentation.json").read_text())
+
+        self.assertEqual(doc["primaryContentSections"], [{
+            "kind": "content",
+            "content": [{
+                "type": "paragraph",
+                "inlineContent": [{"type": "text", "text": "Swift version: 6.3"}],
+            }],
+        }])
+
+    def test_overwrites_existing_primary_content_sections(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            _write_landing_page(archive, [("Modules", ["doc://Test/documentation/Swift"])])
+            curate_navigator.set_version_paragraph(archive, "Swift version: 6.3")
+            curate_navigator.set_version_paragraph(archive, "Swift version: 6.4")
+            doc = json.loads((archive / "data" / "documentation.json").read_text())
+
+        self.assertEqual(len(doc["primaryContentSections"]), 1)
+        self.assertEqual(
+            doc["primaryContentSections"][0]["content"][0]["inlineContent"][0]["text"],
+            "Swift version: 6.4",
+        )
+
+    def test_preserves_topic_sections_and_references(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            _write_landing_page(archive, [("Modules", ["doc://Test/documentation/Swift"])])
+            before = json.loads((archive / "data" / "documentation.json").read_text())
+            curate_navigator.set_version_paragraph(archive, "Swift version: 6.3")
+            after = json.loads((archive / "data" / "documentation.json").read_text())
+
+        self.assertEqual(after["topicSections"], before["topicSections"])
+        self.assertEqual(after["references"], before["references"])
+
+    def test_missing_landing_page_is_noop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            curate_navigator.set_version_paragraph(archive, "Swift version: 6.3")
+            self.assertFalse((archive / "data" / "documentation.json").exists())
 
 
 if __name__ == "__main__":

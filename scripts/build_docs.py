@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from strip_availability import strip_archive
-from curate_navigator import curate_navigator, validate_navigation, NavigationError
+from curate_navigator import curate_navigator, set_version_paragraph, validate_navigation, NavigationError
 
 
 class ArchiveFetchError(Exception):
@@ -140,6 +140,16 @@ def validate_sources(config):
 
     if "version" not in config:
         errors.append("Top-level 'version' field is missing")
+    elif not isinstance(config["version"], dict):
+        errors.append(
+            "Top-level 'version' field must be an object with 'slug' and "
+            "'descriptive-name'"
+        )
+    else:
+        if not config["version"].get("slug"):
+            errors.append("Top-level 'version' object is missing 'slug'")
+        if not config["version"].get("descriptive-name"):
+            errors.append("Top-level 'version' object is missing 'descriptive-name'")
 
     if "sources" not in config:
         errors.append("Top-level 'sources' field is missing")
@@ -758,7 +768,7 @@ def inject_custom_templates_into_stubs(archive_path, common_dir):
     return patched
 
 
-def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prior_failed, common_dir=None, navigation=None, hosting_base_path=None):
+def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd, prior_failed, common_dir=None, navigation=None, hosting_base_path=None, version=None):
     """Merge per-source archives and apply the static-hosting transform.
 
     Returns (succeeded_steps, failed_steps): names that should be added to
@@ -790,15 +800,19 @@ def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prio
             print(f"  - {ma}")
         return [], ["combined-merge"]
 
-    combined_output = output_dir / f"{version}"
+    combined_output = output_dir / f"{version_slug}"
     try:
         merge_archives(
             all_archives, combined_output, docc_cmd,
-            landing_page_name=f"Swift - {version}",
+            landing_page_name="Swift Documentation",
         )
     except subprocess.CalledProcessError:
         print("Error: docc merge failed")
         return [], ["combined-merge"]
+
+    descriptive_name = (version or {}).get("descriptive-name")
+    if descriptive_name:
+        set_version_paragraph(combined_output, f"Swift version: {descriptive_name}")
 
     if navigation is not None:
         try:
@@ -809,7 +823,7 @@ def _finalize_combined_archive(all_archives, output_dir, version, docc_cmd, prio
             return ["combined-merge"], ["navigator-curation"]
 
     try:
-        transform_static_hosting(combined_output, hosting_base_path or version, docc_cmd)
+        transform_static_hosting(combined_output, hosting_base_path or version_slug, docc_cmd)
     except subprocess.CalledProcessError:
         print("Error: docc process-archive transform-for-static-hosting failed")
         curated = ["combined-merge"]
@@ -926,7 +940,8 @@ def main():
         print("No navigation.json found — combined navigator will not be curated.")
 
     version = config["version"]
-    hosting_base_path = f"{args.extra_hosting_prefix}/{version}" if args.extra_hosting_prefix else version
+    version_slug = version["slug"]
+    hosting_base_path = f"{args.extra_hosting_prefix}/{version_slug}" if args.extra_hosting_prefix else version_slug
     sources = config["sources"]
 
     # Ensure consistent, pretty-printed DocC JSON output
@@ -1006,9 +1021,9 @@ def main():
     # Merge all archives — only when building everything (not --only)
     if all_archives and not args.only:
         s_steps, f_steps = _finalize_combined_archive(
-            all_archives, output_dir, version, tools.docc, failed,
+            all_archives, output_dir, version_slug, tools.docc, failed,
             common_dir=common_dir, navigation=navigation,
-            hosting_base_path=hosting_base_path,
+            hosting_base_path=hosting_base_path, version=version,
         )
         succeeded.extend(s_steps)
         failed.extend(f_steps)

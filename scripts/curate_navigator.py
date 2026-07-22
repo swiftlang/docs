@@ -295,6 +295,31 @@ def _section_anchor(title):
     return "-".join(title.split())
 
 
+def set_version_paragraph(archive_path, text):
+    """Set the synthesized landing page's body to a single paragraph of text.
+
+    Overwrites any existing `primaryContentSections` in data/documentation.json — the
+    freshly-merged landing page ships with none (DocC omits empty content sections), so
+    replacing the array wholesale keeps repeated builds idempotent. No-op when
+    data/documentation.json is absent. See hacking-synthesized-landing-page.md.
+    """
+    page = Path(archive_path) / "data" / "documentation.json"
+    if not page.is_file():
+        return
+    doc = json.loads(page.read_text())
+    doc["primaryContentSections"] = [{
+        "kind": "content",
+        "content": [{
+            "type": "paragraph",
+            "inlineContent": [{"type": "text", "text": text}],
+        }],
+    }]
+
+    tmp = page.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    os.replace(tmp, page)
+
+
 def dry_run(archive_path, navigation):
     """Compute the curated navigator WITHOUT modifying the archive.
 
