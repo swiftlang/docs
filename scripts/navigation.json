@@ -10,9 +10,9 @@
        ]
     },
     {
-      "title": "Essential Libraries",
+      "title": "Libraries",
       "modules": [
-        { "source": "swift-stdlib", "path": "/documentation/swift" },
+        { "source": "swift-stdlib", "path": "/documentation/swift", "title": "Standard Library" },
         { "source": "swift-testing", "path": "/documentation/testing" }
       ]
     },
