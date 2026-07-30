@@ -12,7 +12,8 @@
       "title": "Libraries",
       "modules": [
         { "source": "swift-stdlib", "path": "/documentation/swift", "title": "Standard Library" },
-        { "source": "swift-testing", "path": "/documentation/testing" }
+        { "source": "swift-testing", "path": "/documentation/testing" },
+        { "source": "official-libraries", "path": "/documentation/officiallibraries", "title": "Official Libraries" }
       ]
     },
     {
