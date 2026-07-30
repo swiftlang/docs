@@ -4,7 +4,7 @@
     {
       "title": "Swift",
       "modules": [
-        { "source": "swift-book", "path": "/documentation/the-swift-programming-language" },
+        { "source": "swift-book", "path": "/documentation/the-swift-programming-language", "title": "The Swift Programming Language" },
         { "source": "compiler-diagnostics", "path": "/documentation/diagnostics" }
        ]
     },
