@@ -78,6 +78,12 @@
       "targets": ["SwiftLinux"]
     },
     {
+      "id": "swift-windows",
+      "type": "local",
+      "path": "windows",
+      "targets": ["SwiftWindows"]
+    },
+    {
       "id": "official-libraries",
       "type": "local",
       "path": "libraries",
