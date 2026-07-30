@@ -29,7 +29,7 @@
     {
       "title": "Platforms",
       "modules": [
-        { "source": "embedded-swift", "path": "/documentation/embeddedswift", "title": "Embedded" },
+        { "source": "embedded-swift", "path": "/documentation/embeddedswift", "title": "Embedded Swift" },
         { "source": "swift-wasm", "path": "/documentation/wasmguide", "title": "WebAssembly (Wasm)"},
         { "source": "swift-android", "path": "/documentation/swiftandroid", "title": "Android" },
         { "source": "server-guides", "path": "/documentation/serverguides", "title": "Linux" },
