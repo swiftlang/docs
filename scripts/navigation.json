@@ -18,21 +18,21 @@
     {
       "title": "Tools",
       "modules": [
+        { "source": "docc-documentation", "path": "/documentation/docc" },
         { "source": "swiftpm", "path": "/documentation/packagemanagerdocs", "title": "Swift Package Manager" },
         { "source": "swiftpm", "path": "/documentation/packagedescription" },
         { "source": "swiftpm", "path": "/documentation/packageplugin" },
-        { "source": "docc-documentation", "path": "/documentation/docc" },
-        { "source": "vscode-swift", "path": "/documentation/userdocs", "title": "Swift for VS Code" },
+        { "source": "vscode-swift", "path": "/documentation/userdocs", "title": "Swift extension for VS Code" },
         { "source": "swiftly", "path": "/documentation/swiftlydocs", "title": "Swiftly" }
       ]
     },
     {
       "title": "Platforms",
       "modules": [
-        { "source": "embedded-swift", "path": "/documentation/embeddedswift", "title": "Embedded Swift" },
-        { "source": "swift-wasm", "path": "/documentation/wasmguide", "title": "WebAssembly (Wasm)"},
         { "source": "swift-android", "path": "/documentation/swiftandroid", "title": "Android" },
-        { "source": "server-guides", "path": "/documentation/serverguides", "title": "Linux" }
+        { "source": "embedded-swift", "path": "/documentation/embeddedswift", "title": "Embedded Swift" },
+        { "source": "swift-linux", "path": "/documentation/swiftlinux", "title": "Linux" },
+        { "source": "swift-wasm", "path": "/documentation/wasmguide", "title": "WebAssembly (Wasm)"}
       ]
     },
     {

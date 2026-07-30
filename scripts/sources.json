@@ -72,10 +72,10 @@
       "targets": ["WasmGuide"]
     },
     {
-      "id": "server-guides",
+      "id": "swift-linux",
       "type": "local",
-      "path": "server-guides",
-      "targets": ["ServerGuides"]
+      "path": "linux",
+      "targets": ["SwiftLinux"]
     },
     {
       "id": "swift-android",
