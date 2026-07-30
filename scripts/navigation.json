@@ -29,10 +29,15 @@
     {
       "title": "Platforms",
       "modules": [
-        { "source": "embedded-swift", "path": "/documentation/embeddedswift" },
-        { "source": "swift-wasm", "path": "/documentation/wasmguide" },
-        { "source": "swift-android", "path": "/documentation/swiftandroid" },
-        { "source": "server-guides", "path": "/documentation/serverguides" },
+        { "source": "embedded-swift", "path": "/documentation/embeddedswift", "title": "Embedded" },
+        { "source": "swift-wasm", "path": "/documentation/wasmguide", "title": "WebAssembly (Wasm)"},
+        { "source": "swift-android", "path": "/documentation/swiftandroid", "title": "Android" },
+        { "source": "server-guides", "path": "/documentation/serverguides", "title": "Linux" },
+      ]
+    },
+    {
+      "title": "Tutorials",
+      "modules": [
         { "source": "swift-server-todos-tutorial", "path": "/tutorials/getting-started-swift-server" }
       ]
     },
