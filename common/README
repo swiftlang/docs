@@ -3,6 +3,18 @@
 Files used across all of the DocC catalogs to render custom/themed output.
 
 - [Related documentation on theming DocC content](https://www.swift.org/documentation/docc/customizing-the-appearance-of-your-documentation-pages)
-- [OpenAPI spec of theme-settings.json schema](https://github.com/swiftlang/swift-docc/blob/main/Sources/SwiftDocC/SwiftDocC.docc/Resources/ThemeSettings.spec.json)
 
-The common files need to be copied, or perahps linked, into each of the DocC catalogs to keep a consistent flavor across them.
+The common files need to be copied, or perhaps linked, into each of the DocC catalogs to keep a consistent flavor across them.
+
+Both files are intentionally minimal:
+
+- `header.html` has no visible content. It's a reserved hook (DocC's
+  `custom-header` template) for a future documentation-version switcher —
+  add the switcher UI to the `#version-switcher` div when that lands.
+- `footer.html` is just a copyright line, styled with DocC's own CSS custom
+  properties (e.g. `var(--color-text)`) rather than hardcoded colors, so it
+  flips with the page's light/dark mode. It intentionally does not implement
+  a manual light/dark toggle: any custom-footer template suppresses DocC's
+  native `Footer` component (the one that implements the real toggle), so
+  color scheme here is auto-only, following the browser's
+  `prefers-color-scheme` via DocC's default CSS.
