@@ -938,44 +938,6 @@ class FinalizeCombinedArchive(unittest.TestCase):
         self.assertEqual(succeeded, ["combined-merge", "static-hosting-transform"])
         self.assertEqual(failed, [])
 
-    def test_version_paragraph_written_to_landing_page(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-            captured = {}
-
-            def fake_run(cmd, **kw):
-                if "merge" in cmd:
-                    out_idx = cmd.index("--output-path") + 1
-                    out = Path(cmd[out_idx])
-                    out.mkdir(parents=True, exist_ok=True)
-                    (out / "index.html").write_text("merged")
-                    _write_landing_page(out, [("Modules", ["doc://Test/documentation/Swift"])])
-                    return subprocess.CompletedProcess(cmd, 0)
-                # transform-for-static-hosting: capture the landing page as it
-                # stood right before docc replaces the archive in place.
-                archive_arg = Path(cmd[cmd.index("transform-for-static-hosting") + 1])
-                captured["doc"] = json.loads(
-                    (archive_arg / "data" / "documentation.json").read_text()
-                )
-                out_idx = cmd.index("--output-path") + 1
-                out = Path(cmd[out_idx])
-                out.mkdir(parents=True, exist_ok=True)
-                (out / "index.html").write_text("transformed")
-                return subprocess.CompletedProcess(cmd, 0)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                build_docs._finalize_combined_archive(
-                    [archive], tmp_path, "main", ["docc"], prior_failed=[],
-                    version={"slug": "main", "descriptive-name": "6.3"},
-                )
-
-        self.assertEqual(
-            captured["doc"]["primaryContentSections"][0]["content"][0]["inlineContent"][0]["text"],
-            "Swift version: 6.3",
-        )
-
     def _merge_writes_index(self, modules):
         """Build a fake subprocess.run that writes a merged index.json on merge.
 
@@ -1871,54 +1833,6 @@ class CurateLandingPage(unittest.TestCase):
             curate_navigator.curate_navigator(archive, self._nav())
             twice = page.read_bytes()
         self.assertEqual(once, twice)
-
-
-class SetVersionParagraph(unittest.TestCase):
-    def test_adds_paragraph_content_section(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp)
-            _write_landing_page(archive, [("Modules", ["doc://Test/documentation/Swift"])])
-            curate_navigator.set_version_paragraph(archive, "Swift version: 6.3")
-            doc = json.loads((archive / "data" / "documentation.json").read_text())
-
-        self.assertEqual(doc["primaryContentSections"], [{
-            "kind": "content",
-            "content": [{
-                "type": "paragraph",
-                "inlineContent": [{"type": "text", "text": "Swift version: 6.3"}],
-            }],
-        }])
-
-    def test_overwrites_existing_primary_content_sections(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp)
-            _write_landing_page(archive, [("Modules", ["doc://Test/documentation/Swift"])])
-            curate_navigator.set_version_paragraph(archive, "Swift version: 6.3")
-            curate_navigator.set_version_paragraph(archive, "Swift version: 6.4")
-            doc = json.loads((archive / "data" / "documentation.json").read_text())
-
-        self.assertEqual(len(doc["primaryContentSections"]), 1)
-        self.assertEqual(
-            doc["primaryContentSections"][0]["content"][0]["inlineContent"][0]["text"],
-            "Swift version: 6.4",
-        )
-
-    def test_preserves_topic_sections_and_references(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp)
-            _write_landing_page(archive, [("Modules", ["doc://Test/documentation/Swift"])])
-            before = json.loads((archive / "data" / "documentation.json").read_text())
-            curate_navigator.set_version_paragraph(archive, "Swift version: 6.3")
-            after = json.loads((archive / "data" / "documentation.json").read_text())
-
-        self.assertEqual(after["topicSections"], before["topicSections"])
-        self.assertEqual(after["references"], before["references"])
-
-    def test_missing_landing_page_is_noop(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp)
-            curate_navigator.set_version_paragraph(archive, "Swift version: 6.3")
-            self.assertFalse((archive / "data" / "documentation.json").exists())
 
 
 if __name__ == "__main__":

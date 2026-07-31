@@ -1,5 +1,13 @@
 # Hacking the Synthesized Landing Page Body — DocC Merge Post-Processing
 
+> **Status: not currently wired up.** `set_version_paragraph()` and its call
+> from `_finalize_combined_archive()` have been removed from the build
+> scripts — the combined archive's landing page no longer gets a "Swift
+> version: X" paragraph injected. `sources.json`'s `version.descriptive-name`
+> is still validated and recorded in `build-manifest.json`, but nothing reads
+> it to alter documentation content. The mechanics below (verified against
+> `swift-docc` source) remain accurate if this is revisited.
+
 Companion to `hacking-index-json.md` (sidebar/navigator). This file covers the
 **page body** of the combined archive's synthesized landing page
 (`/documentation/`), rendered from `data/documentation.json`, and specifically
