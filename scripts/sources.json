@@ -91,6 +91,12 @@
       "targets": ["SwiftAndroid"]
     },
     {
+      "id": "swift-apple-platforms",
+      "type": "local",
+      "path": "apple-platforms",
+      "targets": ["SwiftApplePlatforms"]
+    },
+    {
       "id": "swift-server-todos-tutorial",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-server-todos-tutorial.git",
