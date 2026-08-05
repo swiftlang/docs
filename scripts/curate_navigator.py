@@ -68,15 +68,13 @@ def _is_external_entry(entry):
 
 def _is_synthesized_external_node(node):
     """A previously-synthesized external-link node from an earlier curation
-    pass, identified the same way docc-render tells it apart from an
-    internal page: its `path` is an absolute URL, not an archive-relative
-    path. Distinct from `RenderIndex.Node.isExternal` (`"external"` in the
-    JSON), which real `docc merge` output never sets for nodes produced by
-    this single-archive merge pipeline, but which this check does not rely
-    on either way.
+    pass, so re-curating an already-curated archive doesn't mistake it for
+    a real merged module. Identified by the same `external` marker
+    `_curate_children` stamps on it when synthesizing it — real `docc
+    merge` output never sets this for nodes produced by this
+    single-archive merge pipeline.
     """
-    path = node.get("path")
-    return isinstance(path, str) and (path.startswith("http://") or path.startswith("https://"))
+    return node.get("external") is True
 
 
 def _is_hybrid_entry(entry):
@@ -102,13 +100,16 @@ def _external_entry_shape_errors(entry, where):
     itself: ``curate_navigator()``/``dry_run()`` take no sources.json and
     can't call ``validate_navigation()`` on their own, so they call this
     directly before trusting an entry's `title`/`url`/`type`.
+
+    Returns ``(errors, is_hybrid)`` — callers branch on ``is_hybrid``
+    without re-deriving it themselves.
     """
     if _is_hybrid_entry(entry):
         return [
             f"navigation.json: a {where} entry has both 'url' and "
             "'source'/'path' — an entry must be either a module "
             "pointer or an external link, not both"
-        ]
+        ], True
 
     errors = []
     title = entry.get("title")
@@ -145,7 +146,7 @@ def _external_entry_shape_errors(entry, where):
             f"invalid 'type' ({entry_type!r})"
         )
 
-    return errors
+    return errors, False
 
 
 def validate_navigation(navigation, sources_config):
@@ -187,17 +188,17 @@ def validate_navigation(navigation, sources_config):
             continue
 
         if _is_external_entry(entry):
-            errors.extend(_external_entry_shape_errors(entry, where))
-            if _is_hybrid_entry(entry):
+            shape_errors, is_hybrid = _external_entry_shape_errors(entry, where)
+            errors.extend(shape_errors)
+            if is_hybrid:
                 continue
 
             url = entry.get("url")
-            label = _entry_label(entry)
 
             if where == "hidden":
                 errors.append(
-                    f"navigation.json: external entry '{label}' is not valid "
-                    "under 'hidden' (there is no module to hide)"
+                    f"navigation.json: external entry '{_entry_label(entry)}' is "
+                    "not valid under 'hidden' (there is no module to hide)"
                 )
                 continue
 
@@ -311,7 +312,7 @@ def _curate_children(children, navigation):
         new_children.append({"type": "groupMarker", "title": group["title"]})
         for entry in group.get("modules", []):
             if _is_external_entry(entry):
-                shape_errors = _external_entry_shape_errors(entry, "group")
+                shape_errors, _ = _external_entry_shape_errors(entry, "group")
                 if shape_errors:
                     raise NavigationError(
                         "navigation.json has an invalid external-link entry: "
