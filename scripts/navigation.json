@@ -12,18 +12,19 @@
       "modules": [
         { "source": "swift-stdlib", "path": "/documentation/swift", "title": "Standard Library" },
         { "source": "swift-testing", "path": "/documentation/testing" },
-        { "source": "libraries", "path": "/documentation/libraries", "title": "Project libraries" }
+        { "title": "Foundation", "url": "https://swiftpackageindex.com/swiftlang/swift-foundation" },
+        { "source": "libraries", "path": "/documentation/libraries", "title": "Swift project libraries" }
       ]
     },
     {
       "title": "Tools",
       "modules": [
-        { "source": "docc-documentation", "path": "/documentation/docc", "title": "Documentation (DocC)" },
+        { "source": "swiftly", "path": "/documentation/swiftlydocs", "title": "Installer (Swiftly)" },
+        { "source": "vscode-swift", "path": "/documentation/userdocs", "title": "IDE Integration" },
         { "source": "swiftpm", "path": "/documentation/packagemanagerdocs", "title": "Package Manager (SwiftPM)" },
         { "source": "swiftpm", "path": "/documentation/packagedescription" },
         { "source": "swiftpm", "path": "/documentation/packageplugin" },
-        { "source": "vscode-swift", "path": "/documentation/userdocs", "title": "IDE Integration" },
-        { "source": "swiftly", "path": "/documentation/swiftlydocs", "title": "Installer (Swiftly)" }
+        { "source": "docc-documentation", "path": "/documentation/docc", "title": "Documentation (DocC)" }
       ]
     },
     {

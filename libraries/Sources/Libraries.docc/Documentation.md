@@ -7,10 +7,6 @@ Official libraries maintained by the Swift project.
     @TitleHeading("")
 }
 
-## Foundation
-
-- [swift-foundation](https://swiftpackageindex.com/swiftlang/swift-foundation) — The foundation project
-
 ## Concurrency and process libraries
 
 - [swift-subprocess](https://swiftpackageindex.com/swiftlang/swift-subprocess) — Cross-platform process spawning package
