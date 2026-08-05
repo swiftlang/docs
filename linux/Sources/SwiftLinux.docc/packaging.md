@@ -117,7 +117,7 @@ CMD ["/<executable-name>"]
 
 The `--static-swift-stdlib` flag links the Swift standard library into your executable,
 so the final image doesn't need the Swift runtime installed.
-If your service uses `FoundationNetworking` or `FoundationXML`, use `swift:6.2-noble-slim` instead of `ubuntu:noble` for the runtime image.
+If your service uses `FoundationNetworking` or `FoundationXML`, use `swift:6.2-noble-slim` instead of `ubuntu:noble` for a smaller runtime image.
 This image includes system libraries that those frameworks require: `libcurl` and `libxml2`.
 
 Build and run the image the same way:
@@ -130,6 +130,37 @@ container build -t <my-app>:latest .
 > like `.build/` and `.git/` from the build context.
 > Without it, `COPY . /workspace` sends everything to the build daemon,
 > which slows builds and can bloat image layers.
+
+### Include the backtracer in the runtime image
+
+When a Swift service crashes, the runtime invokes a helper binary, `swift-backtrace`,
+to capture a stack trace and write it to stderr.
+Slim runtime images don't include this helper,
+so crashes terminate silently without a trace.
+The toolchain ships a statically linked backtracer in the builder image
+that you can copy into the runtime stage as is:
+
+```Dockerfile
+COPY --from=builder /usr/libexec/swift/linux/swift-backtrace-static \
+     /usr/bin/swift-backtrace
+```
+
+The runtime looks for a binary named `swift-backtrace`, so the COPY renames the static helper as it copies it into `/usr/bin`.
+
+For containers without a TTY, set `SWIFT_BACKTRACE` so the backtracer
+runs non-interactively and writes machine-readable output:
+
+```Dockerfile
+ENV SWIFT_BACKTRACE=enable=yes,interactive=no
+```
+
+Current Swift toolchains preserve frame pointers in release builds on Linux server architectures,
+so typical builds don't need extra flags.
+The fast unwinder relies on frame pointers; without them, the runtime falls back to DWARF-based unwinding,
+which is slower but still produces complete traces when `.eh_frame` information is present.
+
+For the full set of `SWIFT_BACKTRACE` options, see the [Swift backtracing reference](https://github.com/swiftlang/swift/blob/main/docs/Backtracing.rst#how-do-i-configure-backtracing).
+To debug your service using a captured trace, see <doc:debugging-a-service-using-a-backtrace>.
 
 ### Cache build artifacts to speed up rebuilds
 
@@ -193,7 +224,7 @@ before the second stage picks it up.
 ### Build for a different platform
 
 If your development machine and deployment target use different CPU architectures —
-for example, building on Apple Silicon (arm64) and deploying to x86_64 cloud infrastructure —
+for example, building on Apple silicon (arm64) and deploying to x86_64 cloud infrastructure —
 you need to specify the target platform when building the image.
 
 With `docker`, use the `--platform` flag:
