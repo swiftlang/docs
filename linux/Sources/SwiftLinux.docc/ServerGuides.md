@@ -7,3 +7,4 @@ Build, package, and deploy Swift applications for Linux servers and cloud infras
 - <doc:building>
 - <doc:packaging>
 - <doc:deploying-static-binaries>
+- <doc:prior-articles>

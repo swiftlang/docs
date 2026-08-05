@@ -132,6 +132,12 @@
       "env": {
         "SWIFTJAVA_DOCC_PLUGIN_INSTALL": "1"
       }
+    },
+    {
+      "id": "prior-articles",
+      "type": "local",
+      "path": "prior",
+      "targets": ["PriorArticles"]
     }
   ]
 }

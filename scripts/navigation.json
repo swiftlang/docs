@@ -54,7 +54,8 @@
       "title": "References",
       "modules": [
         { "source": "compiler-diagnostics", "path": "/documentation/diagnostics", "title": "Compiler diagnostics" },
-        { "source": "swift-migration-guide", "path": "/documentation/migrationguide" }
+        { "source": "swift-migration-guide", "path": "/documentation/migrationguide" },
+        { "source": "prior-articles", "path": "/documentation/priorarticles", "title": "Prior articles" }
       ]
     }
   ],
