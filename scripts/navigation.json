@@ -4,8 +4,7 @@
     {
       "title": "Swift",
       "modules": [
-        { "source": "swift-book", "path": "/documentation/the-swift-programming-language", "title": "The Swift Programming Language" },
-        { "source": "compiler-diagnostics", "path": "/documentation/diagnostics" }
+        { "source": "swift-book", "path": "/documentation/the-swift-programming-language", "title": "The Swift Programming Language" }
        ]
     },
     {
@@ -13,7 +12,7 @@
       "modules": [
         { "source": "swift-stdlib", "path": "/documentation/swift", "title": "Standard Library" },
         { "source": "swift-testing", "path": "/documentation/testing" },
-        { "source": "official-libraries", "path": "/documentation/officiallibraries", "title": "Official Libraries" }
+        { "source": "libraries", "path": "/documentation/libraries", "title": "Project libraries" }
       ]
     },
     {
@@ -51,8 +50,9 @@
       ]
     },
     {
-      "title": "Releases",
+      "title": "References",
       "modules": [
+        { "source": "compiler-diagnostics", "path": "/documentation/diagnostics", "title": "Compiler diagnostics" },
         { "source": "swift-migration-guide", "path": "/documentation/migrationguide" }
       ]
     }

@@ -3,16 +3,16 @@
 import PackageDescription
 
 let package = Package(
-  name: "OfficialLibraries",
+  name: "Libraries",
   products: [
-    .library(name: "OfficialLibraries", targets: ["OfficialLibraries"])
+    .library(name: "Libraries", targets: ["Libraries"])
   ],
   dependencies: [
     .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0")
   ],
   targets: [
     .target(
-      name: "OfficialLibraries",
+      name: "Libraries",
       path: "Sources"
     )
   ]

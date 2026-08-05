@@ -84,10 +84,10 @@
       "targets": ["SwiftWindows"]
     },
     {
-      "id": "official-libraries",
+      "id": "libraries",
       "type": "local",
       "path": "libraries",
-      "targets": ["OfficialLibraries"]
+      "targets": ["Libraries"]
     },
     {
       "id": "swift-android",

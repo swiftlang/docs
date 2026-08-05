@@ -1,9 +1,9 @@
-# ``OfficialLibraries``
+# ``Libraries``
 
 Official libraries maintained by the Swift project.
 
 @Metadata {
-    @DisplayName("Official Libraries")
+    @DisplayName("Project Libraries")
     @TitleHeading("")
 }
 
