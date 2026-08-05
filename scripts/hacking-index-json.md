@@ -77,7 +77,7 @@ Two types matter most for curation:
   `path`, no `children`**. The renderer draws it as a non-clickable section
   heading among its siblings.
 
-## The three curation operations
+## The four curation operations
 
 ### 1. Inject a label (`groupMarker`)
 
@@ -135,6 +135,36 @@ There are **two** ways, with different UX:
   Note: a `groupMarker` with `children` is *not* in the example; the safe,
   proven pattern is **(a) flat markers**. Prefer (a) unless collapsibility is a
   hard requirement and you've confirmed (b) renders.
+
+### 4. Link to external content
+
+A Node's `path` need not be archive-relative — it can be a full URL with a
+scheme (`https://...`). Verified against `swift-docc-render`'s
+`Reference.vue`: its `isInternal` check treats any `url` that doesn't start
+with `/` or `#` as external and renders it via `ReferenceExternal.vue` (a
+plain `<a href>`) instead of a `router-link`. No `type`, no `external` flag,
+and no frontend change are required for this to work — the scheme on `path`
+is the whole mechanism:
+
+```jsonc
+{ "type": "resources", "title": "C++ Interop", "path": "https://www.swift.org/documentation/cxx-interop/", "external": true }
+```
+
+The `external` boolean on `RenderIndex.Node` (`RenderIndexJSON/RenderIndex.swift`)
+is a distinct, narrower concept — DocC only sets it `true` for nodes indexed
+from *another already-built DocC archive* resolved via cross-archive link
+resolution (`NavigatorIndex.swift`'s `index(renderNode: ExternalRenderNode...)`).
+As of this writing, no rendering logic in `swift-docc-render`'s `Navigator`
+component tree actually branches on it — setting it on a hand-authored
+external-link node is harmless/future-proofing, not load-bearing.
+
+`scripts/curate_navigator.py`'s manifest (`navigation.json`) supports
+authoring this kind of node directly, without a backing module: a group's
+`modules[]` array may contain an entry with `title` + `url` (instead of
+`source` + `path`), and curation synthesizes the node above from it. See
+`scripts/README.md`'s "Navigation manifest" section for the exact shape. Such
+entries are sidebar-only — they get no landing-page card — since there is no
+merged-archive identifier to attach one to.
 
 ## Where this slots into the combined build
 

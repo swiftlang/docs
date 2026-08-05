@@ -42,6 +42,15 @@ def _entries(navigation):
         yield entry, "hidden"
 
 
+def _is_external_entry(entry):
+    """An external-link entry has a `url` instead of a `source`/`path`.
+
+    It has no backing module in the merged index — the sidebar node is
+    synthesized directly from the manifest entry.
+    """
+    return "url" in entry
+
+
 def validate_navigation(navigation, sources_config):
     """Validate navigation.json against itself and sources.json (offline).
 
@@ -71,14 +80,40 @@ def validate_navigation(navigation, sources_config):
             errors.append(f"navigation.json: group '{group.get('title')}' "
                           "'modules' must be a list")
 
-    # Per-entry shape, duplicate paths, and source linkage.
+    # Per-entry shape, duplicate paths/urls, and source linkage.
     source_ids = {s.get("id") for s in sources_config.get("sources", [])}
     referenced_sources = set()
-    seen_paths = set()
+    seen_identifiers = set()
     for entry, where in _entries(navigation):
         if not isinstance(entry, dict):
             errors.append(f"navigation.json: a {where} entry must be an object")
             continue
+
+        if _is_external_entry(entry):
+            title = entry.get("title")
+            url = entry.get("url")
+            if not title:
+                errors.append(f"navigation.json: an external {where} entry is missing 'title'")
+            if not url:
+                errors.append(f"navigation.json: an external {where} entry is missing 'url'")
+            elif not url.startswith("https://"):
+                errors.append(
+                    f"navigation.json: external entry '{title or url}' has a 'url' "
+                    f"that is not https:// ({url!r})"
+                )
+            if where == "hidden":
+                errors.append(
+                    f"navigation.json: external entry '{title or url}' is not valid "
+                    "under 'hidden' (there is no module to hide)"
+                )
+            if url:
+                if ("url", url) in seen_identifiers:
+                    errors.append(
+                        f"navigation.json: url '{url}' appears more than once"
+                    )
+                seen_identifiers.add(("url", url))
+            continue
+
         src = entry.get("source")
         path = entry.get("path")
         if not src:
@@ -93,11 +128,11 @@ def validate_navigation(navigation, sources_config):
                     "not present in sources.json"
                 )
         if path:
-            if path in seen_paths:
+            if ("path", path) in seen_identifiers:
                 errors.append(
                     f"navigation.json: path '{path}' appears more than once"
                 )
-            seen_paths.add(path)
+            seen_identifiers.add(("path", path))
 
     # Completeness: every source must be represented (placed or hidden).
     for sid in sorted(s for s in source_ids if s):
@@ -111,17 +146,28 @@ def validate_navigation(navigation, sources_config):
 
 
 def _group_paths(navigation):
-    """Paths that must be rendered (and therefore must exist in the index)."""
+    """Paths that must be rendered (and therefore must exist in the index).
+
+    Excludes external-link entries — they have no backing index module.
+    """
     return {
         entry["path"]
         for group in navigation.get("groups", [])
         for entry in group.get("modules", [])
+        if not _is_external_entry(entry)
     }
 
 
 def _manifest_paths(navigation):
-    """All paths the manifest accounts for (grouped + hidden)."""
-    return {entry["path"] for entry, _ in _entries(navigation)}
+    """All paths the manifest accounts for (grouped + hidden).
+
+    Excludes external-link entries — they have no backing index module.
+    """
+    return {
+        entry["path"]
+        for entry, _ in _entries(navigation)
+        if not _is_external_entry(entry)
+    }
 
 
 def _curate_children(children, navigation):
@@ -165,6 +211,14 @@ def _curate_children(children, navigation):
     for group in navigation.get("groups", []):
         new_children.append({"type": "groupMarker", "title": group["title"]})
         for entry in group.get("modules", []):
+            if _is_external_entry(entry):
+                new_children.append({
+                    "type": entry.get("type", "resources"),
+                    "title": entry["title"],
+                    "path": entry["url"],
+                    "external": True,
+                })
+                continue
             node = path_map[entry["path"]]
             if entry.get("title"):
                 node["title"] = entry["title"]
@@ -260,6 +314,8 @@ def _curate_landing_page(archive_path, navigation):
     for group in navigation.get("groups", []):
         group_idents = []
         for entry in group.get("modules", []):
+            if _is_external_entry(entry):
+                continue
             ident = page_by_path.get(entry["path"].lower())
             if ident is not None:
                 group_idents.append(ident)

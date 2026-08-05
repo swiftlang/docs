@@ -1382,6 +1382,57 @@ class ValidateNavigation(unittest.TestCase):
         errors = curate_navigator.validate_navigation(nav, self.SOURCES)
         self.assertTrue(errors)
 
+    def test_valid_external_entry_has_no_errors(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+                {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/"},
+            ]},
+        ])
+        self.assertEqual(curate_navigator.validate_navigation(nav, self.SOURCES), [])
+
+    def test_external_entry_missing_url_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [{"title": "C++ Interop"}]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(errors)
+
+    def test_external_entry_missing_title_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"url": "https://www.swift.org/documentation/cxx-interop/"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(errors)
+
+    def test_external_entry_non_https_url_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"title": "C++ Interop", "url": "http://www.swift.org/documentation/cxx-interop/"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("https://" in e for e in errors), errors)
+
+    def test_external_entry_under_hidden_is_reported(self):
+        nav = self._nav(hidden=[
+            {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/"},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("hidden" in e for e in errors), errors)
+
+    def test_duplicate_external_urls_are_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/"},
+                {"title": "C++ Interop Again", "url": "https://www.swift.org/documentation/cxx-interop/"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("cxx-interop" in e for e in errors), errors)
+
 
 class CurateNavigator(unittest.TestCase):
     def _nav(self):
@@ -1494,6 +1545,59 @@ class CurateNavigator(unittest.TestCase):
             archive.mkdir()
             with self.assertRaises(curate_navigator.NavigationError):
                 curate_navigator.curate_navigator(archive, self._nav())
+
+    def test_external_entry_is_synthesized(self):
+        nav = {
+            "version": 1,
+            "groups": [{"title": "Interoperability", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+                {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/"},
+            ]}],
+            "hidden": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [_module("Swift", "/documentation/swift")])
+            curate_navigator.curate_navigator(archive, nav)
+            kids = _children_of(archive)
+
+        self.assertEqual(len(kids), 3)
+        external = kids[2]
+        self.assertEqual(external["title"], "C++ Interop")
+        self.assertEqual(external["path"], "https://www.swift.org/documentation/cxx-interop/")
+        self.assertEqual(external["type"], "resources")
+        self.assertTrue(external["external"])
+        self.assertNotIn("children", external)
+
+    def test_external_entry_honors_explicit_type(self):
+        nav = {
+            "version": 1,
+            "groups": [{"title": "Interoperability", "modules": [
+                {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/",
+                 "type": "article"},
+            ]}],
+            "hidden": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [])
+            curate_navigator.curate_navigator(archive, nav)
+            kids = _children_of(archive)
+
+        self.assertEqual(kids[1]["type"], "article")
+
+    def test_external_entry_does_not_affect_dangling_or_unlisted_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [_module("Swift", "/documentation/swift")])
+            nav = {
+                "version": 1,
+                "groups": [{"title": "Language", "modules": [
+                    {"source": "a", "path": "/documentation/swift"},
+                    {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/"},
+                ]}],
+                "hidden": [],
+            }
+            # Should not raise: the external entry has no path to be dangling
+            # or unlisted against the merged index.
+            curate_navigator.curate_navigator(archive, nav)
 
     def test_malformed_index_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1780,6 +1884,28 @@ class CurateLandingPage(unittest.TestCase):
             titles = [t for t, _ in _landing_sections(archive)]
 
         self.assertEqual(titles, ["Language"])
+
+    def test_external_entry_produces_no_landing_page_card(self):
+        nav = {
+            "version": 1,
+            "groups": [
+                {"title": "Language", "modules": [
+                    {"source": "a", "path": "/documentation/swift"},
+                    {"title": "C++ Interop",
+                     "url": "https://www.swift.org/documentation/cxx-interop/"},
+                ]},
+            ],
+            "hidden": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [_module("Swift", "/documentation/swift")])
+            _write_landing_page(archive, [
+                ("Modules", ["doc://Test/documentation/Swift"]),
+            ])
+            curate_navigator.curate_navigator(archive, nav)
+            sections = _landing_sections(archive)
+
+        self.assertEqual(sections, [("Language", ["doc://Test/documentation/Swift"])])
 
     def test_overwrites_kept_reference_kind_and_role(self):
         with tempfile.TemporaryDirectory() as tmp:

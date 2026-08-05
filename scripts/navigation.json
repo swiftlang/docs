@@ -47,7 +47,8 @@
     {
       "title": "Interoperability",
       "modules": [
-        { "source": "swift-java", "path": "/documentation/swiftjavadocumentation", "title": "Swift and Java" }
+        { "source": "swift-java", "path": "/documentation/swiftjavadocumentation", "title": "Swift and Java" },
+        { "title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/" }
       ]
     },
     {

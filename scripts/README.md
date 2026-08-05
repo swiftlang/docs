@@ -33,6 +33,19 @@ in the merged index must be either placed in a group or listed under `hidden` �
 `navigator-curation` build step), and fails the build on any mismatch or
 uncovered module. See `../hacking-index-json.md` for the underlying mechanics.
 
+A group's `modules` list may also contain **external-link entries** — plain
+links to content outside the archive, with no backing `sources.json` id. Give
+these a `title` and an `https://` `url` instead of `source`/`path`:
+
+```jsonc
+{ "title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/" }
+```
+
+External entries render in the sidebar only — they get no card on the
+synthesized landing page — and aren't valid under `hidden` (there's no module
+to hide). An optional `type` overrides the sidebar icon; it defaults to
+`"resources"`.
+
 ### Checking the manifest while editing
 
 Run the standalone checker — it does **not** modify any build output:
