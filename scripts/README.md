@@ -38,7 +38,7 @@ links to content outside the archive, with no backing `sources.json` id. Give
 these a `title` and an `https://` `url` instead of `source`/`path`:
 
 ```jsonc
-{ "title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/" }
+{ "title": "Swift and C++", "url": "https://www.swift.org/documentation/cxx-interop/" }
 ```
 
 External entries render in the sidebar only — they get no card on the

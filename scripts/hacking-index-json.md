@@ -147,7 +147,7 @@ and no frontend change are required for this to work — the scheme on `path`
 is the whole mechanism:
 
 ```jsonc
-{ "type": "resources", "title": "C++ Interop", "path": "https://www.swift.org/documentation/cxx-interop/", "external": true }
+{ "type": "resources", "title": "Swift and C++", "path": "https://www.swift.org/documentation/cxx-interop/", "external": true }
 ```
 
 The `external` boolean on `RenderIndex.Node` (`RenderIndexJSON/RenderIndex.swift`)

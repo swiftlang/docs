@@ -1392,11 +1392,14 @@ class ValidateNavigation(unittest.TestCase):
         self.assertEqual(curate_navigator.validate_navigation(nav, self.SOURCES), [])
 
     def test_external_entry_missing_url_is_reported(self):
+        # `url` key present but empty — still classified as external (has a
+        # `url` key at all), unlike an entry that omits `url` entirely (which
+        # would misclassify as a plain module pointer missing source/path).
         nav = self._nav(groups=[
-            {"title": "Lang", "modules": [{"title": "C++ Interop"}]},
+            {"title": "Lang", "modules": [{"title": "C++ Interop", "url": ""}]},
         ])
         errors = curate_navigator.validate_navigation(nav, self.SOURCES)
-        self.assertTrue(errors)
+        self.assertTrue(any("non-empty 'url'" in e for e in errors), errors)
 
     def test_external_entry_missing_title_is_reported(self):
         nav = self._nav(groups=[
@@ -1405,7 +1408,7 @@ class ValidateNavigation(unittest.TestCase):
             ]},
         ])
         errors = curate_navigator.validate_navigation(nav, self.SOURCES)
-        self.assertTrue(errors)
+        self.assertTrue(any("non-empty 'title'" in e for e in errors), errors)
 
     def test_external_entry_non_https_url_is_reported(self):
         nav = self._nav(groups=[
@@ -1432,6 +1435,112 @@ class ValidateNavigation(unittest.TestCase):
         ])
         errors = curate_navigator.validate_navigation(nav, self.SOURCES)
         self.assertTrue(any("cxx-interop" in e for e in errors), errors)
+
+    def test_non_string_url_is_reported_not_crashed(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [{"title": "C++ Interop", "url": 12345}]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("non-empty 'url'" in e for e in errors), errors)
+
+    def test_non_string_title_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"title": 12345, "url": "https://www.swift.org/documentation/cxx-interop/"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("non-empty 'title'" in e for e in errors), errors)
+
+    def test_hybrid_entry_with_source_and_url_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift", "title": "X",
+                 "url": "https://www.swift.org/documentation/cxx-interop/"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("both" in e for e in errors), errors)
+
+    def test_hybrid_entry_does_not_validate_its_bogus_source(self):
+        # The hybrid-entry error alone should surface; a typo'd source on the
+        # same entry must not silently slip past unreported OR get evaluated
+        # as if it were a normal module pointer.
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"source": "TYPO_BOGUS_SOURCE", "path": "/documentation/never-in-index",
+                 "title": "X", "url": "https://www.swift.org/documentation/cxx-interop/"},
+                {"source": "a", "path": "/documentation/swift"},
+                {"source": "b", "path": "/documentation/internal"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("both" in e for e in errors), errors)
+
+    def test_invalid_type_value_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/",
+                 "type": "totally-bogus-type"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("type" in e for e in errors), errors)
+
+    def test_non_string_type_value_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/",
+                 "type": 12345},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("type" in e for e in errors), errors)
+
+    def test_groupmarker_type_is_rejected_for_external_entry(self):
+        # type "groupMarker" forces the frontend to null out the node's path
+        # (docc-render's NavigatorCardItem.vue), which would silently break
+        # the link — reject it explicitly rather than let it through.
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/",
+                 "type": "groupMarker"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("type" in e for e in errors), errors)
+
+    def test_url_with_leading_or_trailing_whitespace_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/ "},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("whitespace" in e for e in errors), errors)
+
+    def test_scheme_only_url_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"title": "C++ Interop", "url": "https://"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("host" in e for e in errors), errors)
+
+    def test_hidden_entry_duplicating_group_url_reports_once(self):
+        url = "https://www.swift.org/documentation/cxx-interop/"
+        nav = self._nav(
+            groups=[{"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+                {"title": "C++ Interop", "url": url},
+            ]}],
+            hidden=[{"title": "C++ Interop (dup)", "url": url}],
+        )
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        hidden_errors = [e for e in errors if "not valid under 'hidden'" in e]
+        self.assertEqual(len(hidden_errors), 1, errors)
+        self.assertFalse(any("appears more than once" in e for e in errors), errors)
 
 
 class CurateNavigator(unittest.TestCase):
@@ -1568,6 +1677,27 @@ class CurateNavigator(unittest.TestCase):
         self.assertTrue(external["external"])
         self.assertNotIn("children", external)
 
+    def test_external_entry_survives_repeated_curation(self):
+        # Re-curating an already-curated archive (e.g. validate_navigation.py
+        # dry-running against a prior build) must not treat a previously
+        # synthesized external node as a real merged module.
+        nav = {
+            "version": 1,
+            "groups": [{"title": "Interoperability", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+                {"title": "C++ Interop", "url": "https://www.swift.org/documentation/cxx-interop/"},
+            ]}],
+            "hidden": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [_module("Swift", "/documentation/swift")])
+            curate_navigator.curate_navigator(archive, nav)
+            once = (archive / "index" / "index.json").read_bytes()
+            curate_navigator.curate_navigator(archive, nav)
+            twice = (archive / "index" / "index.json").read_bytes()
+
+        self.assertEqual(once, twice)
+
     def test_external_entry_honors_explicit_type(self):
         nav = {
             "version": 1,
@@ -1598,6 +1728,55 @@ class CurateNavigator(unittest.TestCase):
             # Should not raise: the external entry has no path to be dangling
             # or unlisted against the merged index.
             curate_navigator.curate_navigator(archive, nav)
+
+    def test_hybrid_entry_raises_even_without_prior_validation(self):
+        # curate_navigator()/dry_run() take no sources.json and can't call
+        # validate_navigation() themselves — they must defend against a
+        # hybrid entry on their own, not rely on a caller having validated
+        # first (every test in this class calls curate_navigator directly,
+        # same as a hypothetical future caller that skips validation).
+        # No other module in the index, so the only way this can raise is
+        # the explicit hybrid check — not a coincidental dangling/unlisted
+        # collision on '/documentation/nonexistent'.
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [])
+            nav = {
+                "version": 1,
+                "groups": [{"title": "Language", "modules": [
+                    {"source": "a", "path": "/documentation/nonexistent",
+                     "title": "Hijacked!", "url": "https://evil.example.com/"},
+                ]}],
+                "hidden": [],
+            }
+            with self.assertRaises(curate_navigator.NavigationError):
+                curate_navigator.curate_navigator(archive, nav)
+
+    def test_groupmarker_type_raises_even_without_prior_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [])
+            nav = {
+                "version": 1,
+                "groups": [{"title": "Language", "modules": [
+                    {"title": "Dead Link", "url": "https://example.com/",
+                     "type": "groupMarker"},
+                ]}],
+                "hidden": [],
+            }
+            with self.assertRaises(curate_navigator.NavigationError):
+                curate_navigator.curate_navigator(archive, nav)
+
+    def test_missing_title_on_external_entry_raises_even_without_prior_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [])
+            nav = {
+                "version": 1,
+                "groups": [{"title": "Language", "modules": [
+                    {"url": "https://example.com/"},
+                ]}],
+                "hidden": [],
+            }
+            with self.assertRaises(curate_navigator.NavigationError):
+                curate_navigator.curate_navigator(archive, nav)
 
     def test_malformed_index_raises(self):
         with tempfile.TemporaryDirectory() as tmp:

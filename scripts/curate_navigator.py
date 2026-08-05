@@ -33,6 +33,21 @@ class NavigationError(Exception):
     """Raised when curation cannot be applied (dangling/unlisted modules, etc.)."""
 
 
+# `RenderIndex.Node.type` enum, from `hacking-index-json.md` (mirrors
+# `RenderIndex.spec.json`), minus `groupMarker`: that type forces
+# docc-render's `NavigatorCardItem.vue` to null out the node's `path`
+# (`:url="isGroupMarker ? null : (item.path || '')"`), which would silently
+# turn an external-link entry into a dead, non-clickable label.
+VALID_EXTERNAL_LINK_TYPES = frozenset({
+    "article", "associatedtype", "buildSetting", "case", "collection", "class",
+    "container", "dictionarySymbol", "enum", "extension", "func", "httpRequest",
+    "init", "languageGroup", "learn", "macro", "method", "module", "op",
+    "overview", "project", "property", "propertyListKey",
+    "propertyListKeyReference", "protocol", "resources", "root", "sampleCode",
+    "section", "struct", "subscript", "symbol", "typealias", "union", "var",
+})
+
+
 def _entries(navigation):
     """Yield every (entry, where) across groups and hidden, for validation."""
     for group in navigation.get("groups", []):
@@ -49,6 +64,88 @@ def _is_external_entry(entry):
     synthesized directly from the manifest entry.
     """
     return "url" in entry
+
+
+def _is_synthesized_external_node(node):
+    """A previously-synthesized external-link node from an earlier curation
+    pass, identified the same way docc-render tells it apart from an
+    internal page: its `path` is an absolute URL, not an archive-relative
+    path. Distinct from `RenderIndex.Node.isExternal` (`"external"` in the
+    JSON), which real `docc merge` output never sets for nodes produced by
+    this single-archive merge pipeline, but which this check does not rely
+    on either way.
+    """
+    path = node.get("path")
+    return isinstance(path, str) and (path.startswith("http://") or path.startswith("https://"))
+
+
+def _is_hybrid_entry(entry):
+    """True if an external-link entry (has `url`) also carries `source`/
+    `path` — invalid, since an entry can't be both a module pointer and an
+    external link.
+    """
+    return "source" in entry or "path" in entry
+
+
+def _entry_label(entry):
+    """Human-readable name for an entry in error messages: its `title` if
+    it's a non-empty string, else its raw `url`."""
+    title = entry.get("title")
+    return title if isinstance(title, str) and title else entry.get("url")
+
+
+def _external_entry_shape_errors(entry, where):
+    """Structural validation of an external-link entry, independent of
+    sources.json.
+
+    Shared by ``validate_navigation()`` and, defensively, by curation
+    itself: ``curate_navigator()``/``dry_run()`` take no sources.json and
+    can't call ``validate_navigation()`` on their own, so they call this
+    directly before trusting an entry's `title`/`url`/`type`.
+    """
+    if _is_hybrid_entry(entry):
+        return [
+            f"navigation.json: a {where} entry has both 'url' and "
+            "'source'/'path' — an entry must be either a module "
+            "pointer or an external link, not both"
+        ]
+
+    errors = []
+    title = entry.get("title")
+    url = entry.get("url")
+    label = _entry_label(entry)
+
+    if not isinstance(title, str) or not title:
+        errors.append(f"navigation.json: an external {where} entry is missing a non-empty 'title'")
+
+    if not isinstance(url, str) or not url:
+        errors.append(f"navigation.json: an external {where} entry is missing a non-empty 'url'")
+    elif url != url.strip():
+        errors.append(
+            f"navigation.json: external entry '{label}' has a 'url' "
+            f"with leading/trailing whitespace ({url!r})"
+        )
+    elif not url.startswith("https://"):
+        errors.append(
+            f"navigation.json: external entry '{label}' has a 'url' "
+            f"that is not https:// ({url!r})"
+        )
+    elif not urlparse(url).netloc:
+        errors.append(
+            f"navigation.json: external entry '{label}' has a 'url' "
+            f"with no host ({url!r})"
+        )
+
+    entry_type = entry.get("type")
+    if entry_type is not None and (
+        not isinstance(entry_type, str) or entry_type not in VALID_EXTERNAL_LINK_TYPES
+    ):
+        errors.append(
+            f"navigation.json: external entry '{label}' has an "
+            f"invalid 'type' ({entry_type!r})"
+        )
+
+    return errors
 
 
 def validate_navigation(navigation, sources_config):
@@ -90,23 +187,21 @@ def validate_navigation(navigation, sources_config):
             continue
 
         if _is_external_entry(entry):
-            title = entry.get("title")
+            errors.extend(_external_entry_shape_errors(entry, where))
+            if _is_hybrid_entry(entry):
+                continue
+
             url = entry.get("url")
-            if not title:
-                errors.append(f"navigation.json: an external {where} entry is missing 'title'")
-            if not url:
-                errors.append(f"navigation.json: an external {where} entry is missing 'url'")
-            elif not url.startswith("https://"):
-                errors.append(
-                    f"navigation.json: external entry '{title or url}' has a 'url' "
-                    f"that is not https:// ({url!r})"
-                )
+            label = _entry_label(entry)
+
             if where == "hidden":
                 errors.append(
-                    f"navigation.json: external entry '{title or url}' is not valid "
+                    f"navigation.json: external entry '{label}' is not valid "
                     "under 'hidden' (there is no module to hide)"
                 )
-            if url:
+                continue
+
+            if isinstance(url, str) and url:
                 if ("url", url) in seen_identifiers:
                     errors.append(
                         f"navigation.json: url '{url}' appears more than once"
@@ -176,9 +271,13 @@ def _curate_children(children, navigation):
     Raises NavigationError on dangling grouped paths, on index modules the
     manifest neither groups nor hides, or on unexpected pathless nodes.
     """
-    # Drop any existing group markers so re-running is idempotent, then index
-    # the remaining nodes by path.
-    real_nodes = [c for c in children if c.get("type") != "groupMarker"]
+    # Drop any existing group markers and previously-synthesized external
+    # links so re-running is idempotent, then index the remaining real
+    # modules by path.
+    real_nodes = [
+        c for c in children
+        if c.get("type") != "groupMarker" and not _is_synthesized_external_node(c)
+    ]
     path_map = {}
     for node in real_nodes:
         path = node.get("path")
@@ -212,6 +311,12 @@ def _curate_children(children, navigation):
         new_children.append({"type": "groupMarker", "title": group["title"]})
         for entry in group.get("modules", []):
             if _is_external_entry(entry):
+                shape_errors = _external_entry_shape_errors(entry, "group")
+                if shape_errors:
+                    raise NavigationError(
+                        "navigation.json has an invalid external-link entry: "
+                        + "; ".join(shape_errors)
+                    )
                 new_children.append({
                     "type": entry.get("type", "resources"),
                     "title": entry["title"],
