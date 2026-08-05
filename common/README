@@ -11,10 +11,24 @@ Both files are intentionally minimal:
 - `header.html` has no visible content. It's a reserved hook (DocC's
   `custom-header` template) for a future documentation-version switcher —
   add the switcher UI to the `#version-switcher` div when that lands.
-- `footer.html` is just a copyright line, styled with DocC's own CSS custom
+- `footer.html` carries the copyright/trademark notice, the same legal links
+  (License, Security, Privacy Policy, Cookies) swift.org's footer has, and
+  an Adobe Analytics page-activation snippet mirroring swift.org's
+  (`s_account = "awdswiftorg"`). It's styled with DocC's own CSS custom
   properties (e.g. `var(--color-text)`) rather than hardcoded colors, so it
   flips with the page's light/dark mode. It intentionally does not implement
   a manual light/dark toggle: any custom-footer template suppresses DocC's
   native `Footer` component (the one that implements the real toggle), so
   color scheme here is auto-only, following the browser's
   `prefers-color-scheme` via DocC's default CSS.
+  The copyright line uses a `{{COPYRIGHT_YEAR}}` placeholder that
+  `scripts/build_docs.py`'s `render_common_template()` substitutes with the
+  current year at build time, so it doesn't need an annual manual bump.
+  The analytics snippet deliberately differs from swift.org's in one way:
+  it never calls `document.write()`. swift.org's footer is parsed inline by
+  the browser, but this file gets cloned into a `<template>` and
+  `appendChild`'d into a Shadow DOM by swift-docc-render, and `document.write`
+  from a script inserted that way is spec'd to wipe the whole page. The
+  vendored Adobe library fires its tracking beacon itself (via an `Image()`
+  request) as a side effect of calling `s.t()`, so dropping `document.write`
+  doesn't lose the actual tracking call — only a legacy fallback pixel.

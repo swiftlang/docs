@@ -1021,6 +1021,64 @@ class FinalizeCombinedArchive(unittest.TestCase):
         self.assertEqual(failed, [])
 
 
+class RenderCommonTemplate(unittest.TestCase):
+    def test_substitutes_copyright_year_placeholder(self):
+        rendered = build_docs.render_common_template(
+            "Copyright (c) {{COPYRIGHT_YEAR}} Apple Inc.", year=2031
+        )
+        self.assertEqual(rendered, "Copyright (c) 2031 Apple Inc.")
+
+    def test_defaults_to_current_utc_year_when_not_given(self):
+        from datetime import datetime, timezone
+
+        expected_year = datetime.now(timezone.utc).year
+        rendered = build_docs.render_common_template("{{COPYRIGHT_YEAR}}")
+        self.assertEqual(rendered, str(expected_year))
+
+    def test_no_op_when_placeholder_absent(self):
+        rendered = build_docs.render_common_template("no placeholder here", year=2031)
+        self.assertEqual(rendered, "no placeholder here")
+
+    def test_substitutes_multiple_occurrences(self):
+        rendered = build_docs.render_common_template(
+            "{{COPYRIGHT_YEAR}} and {{COPYRIGHT_YEAR}}", year=2031
+        )
+        self.assertEqual(rendered, "2031 and 2031")
+
+
+class InstallTemplates(unittest.TestCase):
+    def test_substitutes_copyright_year_in_installed_footer(self):
+        from datetime import datetime, timezone
+
+        expected_year = datetime.now(timezone.utc).year
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common = root / "common"
+            common.mkdir()
+            (common / "header.html").write_text("HDR")
+            (common / "footer.html").write_text("Copyright {{COPYRIGHT_YEAR}}")
+            catalog = root / "Foo.docc"
+            catalog.mkdir()
+            build_docs.install_templates(catalog, common, "foo")
+            self.assertEqual(
+                (catalog / "footer.html").read_text(), f"Copyright {expected_year}"
+            )
+            self.assertEqual((catalog / "header.html").read_text(), "HDR")
+
+    def test_warns_and_overwrites_existing_template(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common = root / "common"
+            common.mkdir()
+            (common / "header.html").write_text("HDR")
+            (common / "footer.html").write_text("FTR")
+            catalog = root / "Foo.docc"
+            catalog.mkdir()
+            (catalog / "footer.html").write_text("stale")
+            build_docs.install_templates(catalog, common, "foo")
+            self.assertEqual((catalog / "footer.html").read_text(), "FTR")
+
+
 class InjectCustomTemplatesIntoStubs(unittest.TestCase):
     """Workaround for swiftlang/swift-docc#1532: see build_docs function docstring."""
 
@@ -1120,6 +1178,21 @@ class InjectCustomTemplatesIntoStubs(unittest.TestCase):
             (common / "footer.html").write_text("FTR")
             patched = build_docs.inject_custom_templates_into_stubs(archive, common)
             self.assertEqual(patched, 0)
+
+    def test_substitutes_copyright_year_placeholder_in_stubs(self):
+        from datetime import datetime, timezone
+
+        expected_year = datetime.now(timezone.utc).year
+        with tempfile.TemporaryDirectory() as tmp:
+            archive, common = self._make_archive(
+                Path(tmp), "HDR", "Copyright {{COPYRIGHT_YEAR}}"
+            )
+            build_docs.inject_custom_templates_into_stubs(archive, common)
+            text = (archive / "documentation" / "index.html").read_text()
+            self.assertIn(
+                f'<template id="custom-footer">Copyright {expected_year}</template>',
+                text,
+            )
 
     def test_template_ordering_matches_docc_convert(self):
         """custom-footer comes before custom-header — same order docc convert emits."""

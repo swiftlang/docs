@@ -429,6 +429,13 @@ def find_docc_catalog_for_target(source_dir, target):
     return None
 
 
+def render_common_template(text, year=None):
+    """Substitute the {{COPYRIGHT_YEAR}} placeholder used in common/*.html."""
+    if year is None:
+        year = datetime.now(timezone.utc).year
+    return text.replace("{{COPYRIGHT_YEAR}}", str(year))
+
+
 def install_templates(catalog_dir, common_dir, source_id):
     """Copy common template files (header.html, footer.html) into a .docc catalog."""
     for tmpl in TEMPLATE_FILES:
@@ -436,7 +443,7 @@ def install_templates(catalog_dir, common_dir, source_id):
         dst = catalog_dir / tmpl
         if dst.exists():
             print(f"  WARNING: overwriting existing {tmpl} in {source_id} catalog")
-        shutil.copy2(str(src), str(dst))
+        dst.write_text(render_common_template(src.read_text()))
         print(f"  Installed {tmpl} -> {catalog_dir}/")
 
 
@@ -747,8 +754,8 @@ def inject_custom_templates_into_stubs(archive_path, common_dir):
     after `<body data-color-scheme="auto">` to mirror the placement
     docc convert produces in the root. Returns the number of stubs patched.
     """
-    header = (common_dir / "header.html").read_text()
-    footer = (common_dir / "footer.html").read_text()
+    header = render_common_template((common_dir / "header.html").read_text())
+    footer = render_common_template((common_dir / "footer.html").read_text())
     anchor = '<body data-color-scheme="auto">'
     # Mirror docc convert ordering: footer template first, then header.
     injection = (
