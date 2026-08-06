@@ -4,7 +4,7 @@ Build and ship apps for iOS, iPadOS, macOS, watchOS, tvOS, and visionOS.
 
 @Metadata {
     @DisplayName("Apple platforms")
-    @TitleHeading("")
+    @TitleHeading("Platforms")
 }
 
 Swift is the primary language for building apps across Apple's platforms, with

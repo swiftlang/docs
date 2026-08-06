@@ -4,7 +4,7 @@ Build and run Swift on Windows.
 
 @Metadata {
     @DisplayName("Windows")
-    @TitleHeading("")
+    @TitleHeading("Platforms")
 }
 
 Swift supports native development on Windows, including a downloadable

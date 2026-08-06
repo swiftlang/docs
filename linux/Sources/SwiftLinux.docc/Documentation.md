@@ -4,7 +4,7 @@ Build and host libraries, apps, and services on Linux.
 
 @Metadata {
     @DisplayName("Linux")
-    @TitleHeading("")
+    @TitleHeading("Platforms")
 }
 
 ## Topics
