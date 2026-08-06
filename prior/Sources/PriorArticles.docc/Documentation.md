@@ -5,7 +5,7 @@ documentation collection.
 
 @Metadata {
     @DisplayName("Prior articles")
-    @TitleHeading("")
+    @TitleHeading("References")
 }
 
 These pages still live on swift.org's own site rather than in this combined
