@@ -12,7 +12,7 @@
       "modules": [
         { "source": "swift-stdlib", "path": "/documentation/swift", "title": "Standard Library" },
         { "source": "swift-testing", "path": "/documentation/testing" },
-        { "title": "Foundation", "url": "https://swiftpackageindex.com/swiftlang/swift-foundation" },
+        { "title": "Foundation", "url": "https://developer.apple.com/documentation/foundation" },
         { "source": "libraries", "path": "/documentation/libraries", "title": "Swift project libraries" }
       ]
     },
