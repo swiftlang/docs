@@ -37,12 +37,6 @@
       ]
     },
     {
-      "title": "Tutorials",
-      "modules": [
-        { "source": "swift-server-todos-tutorial", "path": "/tutorials/getting-started-swift-server" }
-      ]
-    },
-    {
       "title": "Interoperability",
       "modules": [
         { "source": "swift-java", "path": "/documentation/swiftjavadocumentation", "title": "Swift and Java" },
@@ -61,6 +55,7 @@
   "hidden": [
     { "source": "swiftpm", "path": "/documentation/packagedescription" },
     { "source": "swiftpm", "path": "/documentation/packageplugin" },
+    { "source": "swift-server-todos-tutorial", "path": "/tutorials/getting-started-swift-server" },
     { "source": "swift-stdlib", "path": "/documentation/cxx" },
     { "source": "swift-stdlib", "path": "/documentation/cxxstdlib" },
     { "source": "swift-stdlib", "path": "/documentation/distributed" },
