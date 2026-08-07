@@ -22,8 +22,6 @@
         { "source": "swiftly", "path": "/documentation/swiftlydocs", "title": "Installer (Swiftly)" },
         { "source": "vscode-swift", "path": "/documentation/userdocs", "title": "IDE Integration" },
         { "source": "swiftpm", "path": "/documentation/packagemanagerdocs", "title": "Package Manager (SwiftPM)" },
-        { "source": "swiftpm", "path": "/documentation/packagedescription" },
-        { "source": "swiftpm", "path": "/documentation/packageplugin" },
         { "source": "docc-documentation", "path": "/documentation/docc", "title": "Documentation (DocC)" }
       ]
     },
@@ -61,6 +59,8 @@
     }
   ],
   "hidden": [
+    { "source": "swiftpm", "path": "/documentation/packagedescription" },
+    { "source": "swiftpm", "path": "/documentation/packageplugin" },
     { "source": "swift-stdlib", "path": "/documentation/cxx" },
     { "source": "swift-stdlib", "path": "/documentation/cxxstdlib" },
     { "source": "swift-stdlib", "path": "/documentation/distributed" },
