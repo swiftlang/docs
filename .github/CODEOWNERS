@@ -15,4 +15,4 @@ CODEOWNERS @heckj @shahmishal
 /api-guidelines/ @swiftlang/language-steering-group
 /ecosystem-tools/ @swiftlang/ecosystem-steering-group
 /language-guides/ @swiftlang/language-steering-group
-/server-guides/ @swiftlang/server-workgroup
+/linux/ @swiftlang/server-workgroup @heckj
