@@ -4,7 +4,7 @@ Official libraries maintained by the Swift project.
 
 @Metadata {
     @DisplayName("Project Libraries")
-    @TitleHeading("")
+    @TitleHeading("Libraries")
 }
 
 ## Concurrency and process libraries
