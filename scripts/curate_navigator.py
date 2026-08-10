@@ -167,16 +167,20 @@ def validate_navigation(navigation, sources_config):
     if not isinstance(hidden, list):
         errors.append("navigation.json: 'hidden' must be a list")
 
-    # Per-group shape.
+    # Per-group shape. `title` is optional: omit it (or set it to null) for a
+    # headerless group, whose modules render with no groupMarker in the
+    # sidebar and no titled section on the landing page. When present it
+    # must be a non-empty string.
     for i, group in enumerate(groups):
         if not isinstance(group, dict):
             errors.append(f"navigation.json: group #{i} must be an object")
             continue
-        if not group.get("title"):
-            errors.append(f"navigation.json: group #{i} is missing a non-empty 'title'")
+        title = group.get("title")
+        if title is not None and not (isinstance(title, str) and title):
+            errors.append(f"navigation.json: group #{i} has an invalid 'title' "
+                          "(must be a non-empty string, or omitted/null for no header)")
         if not isinstance(group.get("modules", []), list):
-            errors.append(f"navigation.json: group '{group.get('title')}' "
-                          "'modules' must be a list")
+            errors.append(f"navigation.json: group #{i} 'modules' must be a list")
 
     # Per-entry shape, duplicate paths/urls, and source linkage.
     source_ids = {s.get("id") for s in sources_config.get("sources", [])}
@@ -309,7 +313,8 @@ def _curate_children(children, navigation):
 
     new_children = []
     for group in navigation.get("groups", []):
-        new_children.append({"type": "groupMarker", "title": group["title"]})
+        if group.get("title"):
+            new_children.append({"type": "groupMarker", "title": group["title"]})
         for entry in group.get("modules", []):
             if _is_external_entry(entry):
                 shape_errors, _ = _external_entry_shape_errors(entry, "group")
@@ -390,7 +395,8 @@ def _curate_landing_page(archive_path, navigation):
 
       * one ``topicSection`` per ``navigation.groups`` entry, in declared order,
         titled by the group's ``title``, with identifiers in the group's
-        ``modules`` order;
+        ``modules`` order; a group with no ``title`` produces a section with
+        no ``title``/``anchor`` key, so its modules appear with no header;
       * groups whose modules don't match any identifier on the page are
         dropped (e.g. a nav module the merge step never surfaced as a card);
       * each kept identifier's reference is forced to ``kind:"symbol"``,
@@ -426,11 +432,14 @@ def _curate_landing_page(archive_path, navigation):
             if ident is not None:
                 group_idents.append(ident)
         if group_idents:
-            new_sections.append({
-                "title": group["title"],
-                "identifiers": group_idents,
-                "anchor": _section_anchor(group["title"]),
-            })
+            title = group.get("title")
+            section = {}
+            if title:
+                section["title"] = title
+            section["identifiers"] = group_idents
+            if title:
+                section["anchor"] = _section_anchor(title)
+            new_sections.append(section)
             placed_idents.extend(group_idents)
     doc["topicSections"] = new_sections
 

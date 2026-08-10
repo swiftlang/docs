@@ -2,7 +2,6 @@
   "version": 1,
   "groups": [
     {
-      "title": "Swift",
       "modules": [
         { "source": "swift-book", "path": "/documentation/the-swift-programming-language", "title": "The Swift Programming Language" }
        ]

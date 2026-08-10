@@ -1448,6 +1448,21 @@ class ValidateNavigation(unittest.TestCase):
         errors = curate_navigator.validate_navigation(nav, self.SOURCES)
         self.assertTrue(errors)
 
+    def test_group_with_omitted_title_is_valid(self):
+        # Omitting `title` entirely means "no visible header" for this
+        # group's modules — distinct from an explicit empty string, which is
+        # still rejected above.
+        nav = self._nav(groups=[{"modules": [
+            {"source": "a", "path": "/documentation/swift"},
+        ]}])
+        self.assertEqual(curate_navigator.validate_navigation(nav, self.SOURCES), [])
+
+    def test_group_with_null_title_is_valid(self):
+        nav = self._nav(groups=[{"title": None, "modules": [
+            {"source": "a", "path": "/documentation/swift"},
+        ]}])
+        self.assertEqual(curate_navigator.validate_navigation(nav, self.SOURCES), [])
+
     def test_malformed_entry_missing_path_is_reported(self):
         nav = self._nav(groups=[{"title": "Lang", "modules": [
             {"source": "a"},
@@ -1653,6 +1668,33 @@ class CurateNavigator(unittest.TestCase):
         self.assertEqual(kids[1]["title"], "The Swift Language")
         self.assertEqual(kids[2]["path"], "/documentation/testing")
         self.assertFalse(any(k.get("path") == "/documentation/internal" for k in kids))
+
+    def test_headerless_group_has_no_group_marker(self):
+        # A group with no `title` renders its modules with no preceding
+        # groupMarker, while other groups still get theirs.
+        nav = {
+            "version": 1,
+            "groups": [
+                {"modules": [{"source": "a", "path": "/documentation/swift"}]},
+                {"title": "Language", "modules": [
+                    {"source": "b", "path": "/documentation/testing"},
+                ]},
+            ],
+            "hidden": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [
+                _module("Swift", "/documentation/swift"),
+                _module("Testing", "/documentation/testing"),
+            ])
+            curate_navigator.curate_navigator(archive, nav)
+            kids = _children_of(archive)
+
+        self.assertEqual(len(kids), 3)
+        self.assertEqual(kids[0]["path"], "/documentation/swift")
+        self.assertNotEqual(kids[0].get("type"), "groupMarker")
+        self.assertEqual(kids[1], {"type": "groupMarker", "title": "Language"})
+        self.assertEqual(kids[2]["path"], "/documentation/testing")
 
     def test_dangling_manifest_path_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2158,6 +2200,38 @@ class CurateLandingPage(unittest.TestCase):
             sections = _landing_sections(archive)
 
         self.assertEqual(sections, [("Language", ["doc://Test/documentation/Swift"])])
+
+    def test_headerless_group_produces_titleless_section(self):
+        nav = {
+            "version": 1,
+            "groups": [
+                {"modules": [{"source": "a", "path": "/documentation/swift"}]},
+                {"title": "Language", "modules": [
+                    {"source": "a", "path": "/documentation/testing"},
+                ]},
+            ],
+            "hidden": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_index(Path(tmp), [
+                _module("Swift", "/documentation/swift"),
+                _module("Testing", "/documentation/testing"),
+            ])
+            _write_landing_page(archive, [
+                ("Modules", [
+                    "doc://Test/documentation/Swift",
+                    "doc://Test/documentation/Testing",
+                ]),
+            ])
+            curate_navigator.curate_navigator(archive, nav)
+            doc = json.loads((archive / "data" / "documentation.json").read_text())
+            sections = doc["topicSections"]
+
+        self.assertNotIn("title", sections[0])
+        self.assertNotIn("anchor", sections[0])
+        self.assertEqual(sections[0]["identifiers"], ["doc://Test/documentation/Swift"])
+        self.assertEqual(sections[1]["title"], "Language")
+        self.assertEqual(sections[1]["anchor"], "Language")
 
     def test_overwrites_kept_reference_kind_and_role(self):
         with tempfile.TemporaryDirectory() as tmp:

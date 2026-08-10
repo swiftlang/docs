@@ -33,6 +33,10 @@ in the merged index must be either placed in a group or listed under `hidden` �
 `navigator-curation` build step), and fails the build on any mismatch or
 uncovered module. See `../hacking-index-json.md` for the underlying mechanics.
 
+A group's `title` is optional — omit it (or set it to `null`) for a headerless
+group whose modules render with no section label in either the sidebar or the
+landing page.
+
 A group's `modules` list may also contain **external-link entries** — plain
 links to content outside the archive, with no backing `sources.json` id. Give
 these a `title` and an `https://` `url` instead of `source`/`path`:
