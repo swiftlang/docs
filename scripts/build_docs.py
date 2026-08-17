@@ -29,7 +29,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from strip_availability import strip_archive
-from curate_navigator import curate_navigator, validate_navigation, NavigationError
+from suppress_eyebrows import suppress_archive as suppress_eyebrow_archive
+from curate_navigator import (
+    curate_navigator,
+    validate_navigation,
+    collect_eyebrow_overrides,
+    NavigationError,
+)
 
 
 class ArchiveFetchError(Exception):
@@ -828,24 +834,36 @@ def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd,
             print(f"Error: navigator curation failed: {e}")
             return ["combined-merge"], ["navigator-curation"]
 
+    prior_steps = ["combined-merge"]
+    if navigation is not None:
+        prior_steps.append("navigator-curation")
+
+    try:
+        eyebrows_config = {
+            "suppress": ((navigation or {}).get("eyebrows") or {}).get("suppress", False),
+            "overrides": collect_eyebrow_overrides(navigation or {}),
+        }
+        scanned, modified = suppress_eyebrow_archive(combined_output, eyebrows_config)
+        print(f"Eyebrow suppression: scanned {scanned} file(s), modified {modified}.")
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Error: eyebrow suppression failed: {e}")
+        return prior_steps, ["eyebrow-suppression"]
+
+    prior_steps.append("eyebrow-suppression")
+
     try:
         transform_static_hosting(combined_output, hosting_base_path or version_slug, docc_cmd)
     except subprocess.CalledProcessError:
         print("Error: docc process-archive transform-for-static-hosting failed")
-        curated = ["combined-merge"]
-        if navigation is not None:
-            curated.append("navigator-curation")
-        return curated, ["static-hosting-transform"]
+        return prior_steps, ["static-hosting-transform"]
 
     # Workaround for swiftlang/swift-docc#1532 — drop this when fixed.
     if common_dir is not None:
         patched = inject_custom_templates_into_stubs(combined_output, common_dir)
         print(f"Patched custom-header/footer into {patched} per-route stub(s).")
 
-    succeeded = ["combined-merge", "static-hosting-transform"]
-    if navigation is not None:
-        succeeded.insert(1, "navigator-curation")
-    return succeeded, []
+    prior_steps.append("static-hosting-transform")
+    return prior_steps, []
 
 
 def assemble_in_source_order(results_by_index, num_sources):

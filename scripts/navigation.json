@@ -1,5 +1,9 @@
 {
   "version": 1,
+  "eyebrows": {
+    "suppress": true,
+    "landing": null
+  },
   "groups": [
     {
       "modules": [

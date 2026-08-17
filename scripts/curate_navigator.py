@@ -167,6 +167,29 @@ def validate_navigation(navigation, sources_config):
     if not isinstance(hidden, list):
         errors.append("navigation.json: 'hidden' must be a list")
 
+    # Optional 'eyebrows' block, consumed by suppress_eyebrows.py: a global
+    # on/off switch, plus 'landing' — a dedicated override for the
+    # docc-merge-synthesized combined landing page ("Project"), which has no
+    # backing module entry to carry a per-entry 'eyebrow' field. Per-module
+    # overrides instead live on the module entries themselves (validated
+    # below, alongside 'source'/'path') and are collected by
+    # collect_eyebrow_overrides().
+    eyebrows = navigation.get("eyebrows")
+    if eyebrows is not None:
+        if not isinstance(eyebrows, dict):
+            errors.append("navigation.json: 'eyebrows' must be an object")
+        else:
+            suppress = eyebrows.get("suppress")
+            if suppress is not None and not isinstance(suppress, bool):
+                errors.append(
+                    "navigation.json: 'eyebrows.suppress' must be a boolean"
+                )
+            landing = eyebrows.get("landing")
+            if landing is not None and not isinstance(landing, str):
+                errors.append(
+                    "navigation.json: 'eyebrows.landing' must be a string (or null)"
+                )
+
     # Per-group shape. `title` is optional: omit it (or set it to null) for a
     # headerless group, whose modules render with no groupMarker in the
     # sidebar and no titled section on the landing page. When present it
@@ -206,6 +229,12 @@ def validate_navigation(navigation, sources_config):
                 )
                 continue
 
+            if "eyebrow" in entry:
+                errors.append(
+                    f"navigation.json: external entry '{_entry_label(entry)}' has "
+                    "'eyebrow' (there is no backing page to apply it to)"
+                )
+
             if isinstance(url, str) and url:
                 if ("url", url) in seen_identifiers:
                     errors.append(
@@ -233,6 +262,11 @@ def validate_navigation(navigation, sources_config):
                     f"navigation.json: path '{path}' appears more than once"
                 )
             seen_identifiers.add(("path", path))
+        if "eyebrow" in entry and not isinstance(entry["eyebrow"], str):
+            errors.append(
+                f"navigation.json: {_entry_label(entry) or path or '(entry)'} has "
+                "an 'eyebrow' that must be a string"
+            )
 
     # Completeness: every source must be represented (placed or hidden).
     for sid in sorted(s for s in source_ids if s):
@@ -243,6 +277,36 @@ def validate_navigation(navigation, sources_config):
             )
 
     return errors
+
+
+def collect_eyebrow_overrides(navigation):
+    """Build the {path: eyebrow_text} map suppress_eyebrows.py needs, sourced
+    from navigation.json rather than a separately-maintained table.
+
+    Walks every module entry (in a group or under 'hidden') that carries an
+    'eyebrow' field, keyed by that entry's 'path' — the same path already
+    used to identify it elsewhere. External entries have no backing page and
+    are skipped even if malformed enough to carry one (validate_navigation()
+    is what reports that as an error).
+
+    The synthesized combined landing page (`/documentation`) has no module
+    entry to attach an 'eyebrow' to, so it's carried separately in
+    `eyebrows.landing` and folded in here under its fixed path.
+    """
+    overrides = {}
+    for entry, _where in _entries(navigation):
+        if _is_external_entry(entry):
+            continue
+        path = entry.get("path")
+        eyebrow = entry.get("eyebrow")
+        if path and isinstance(eyebrow, str):
+            overrides[path] = eyebrow
+
+    landing = (navigation.get("eyebrows") or {}).get("landing")
+    if isinstance(landing, str):
+        overrides["/documentation"] = landing
+
+    return overrides
 
 
 def _group_paths(navigation):

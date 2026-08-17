@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_docs  # noqa: E402
 import curate_navigator  # noqa: E402
 import strip_availability  # noqa: E402
+import suppress_eyebrows  # noqa: E402
 import validate_navigation as validate_navigation_cli  # noqa: E402
 
 
@@ -626,6 +627,125 @@ class StripArchive(unittest.TestCase):
                 strip_availability.strip_archive(not_an_archive)
 
 
+def _make_archive_with_collections(root, archive_name="Combined.doccarchive"):
+    """Build a minimal merged .doccarchive tree with two module landing pages,
+    the synthesized combined landing page, and one non-collection page.
+
+    Returns the archive path.
+    """
+    archive = root / archive_name
+    doc_dir = archive / "data" / "documentation"
+    doc_dir.mkdir(parents=True)
+
+    (archive / "data" / "documentation.json").write_text(json.dumps({
+        "metadata": {"title": "Swift Documentation", "role": "collection",
+                     "roleHeading": "Project"},
+    }))
+    (doc_dir / "swift.json").write_text(json.dumps({
+        "metadata": {"title": "Swift", "role": "collection",
+                     "roleHeading": "Framework"},
+    }))
+    (doc_dir / "userdocs.json").write_text(json.dumps({
+        "metadata": {"title": "VS Code", "role": "collection", "roleHeading": ""},
+    }))
+    (doc_dir / "closedrange.json").write_text(json.dumps({
+        "metadata": {"title": "ClosedRange", "role": "symbol",
+                     "roleHeading": "Structure"},
+    }))
+
+    return archive
+
+
+class SuppressEyebrowsArchive(unittest.TestCase):
+    def test_no_config_is_a_true_no_op(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_archive_with_collections(Path(tmp))
+            before = (archive / "data" / "documentation" / "swift.json").read_text()
+
+            scanned, modified = suppress_eyebrows.suppress_archive(archive)
+
+            self.assertEqual((scanned, modified), (0, 0))
+            after = (archive / "data" / "documentation" / "swift.json").read_text()
+            self.assertEqual(before, after)
+
+    def test_suppress_true_blanks_only_collection_roleheadings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_archive_with_collections(Path(tmp))
+
+            scanned, modified = suppress_eyebrows.suppress_archive(
+                archive, {"suppress": True}
+            )
+
+            landing = json.loads(
+                (archive / "data" / "documentation.json").read_text()
+            )
+            swift = json.loads(
+                (archive / "data" / "documentation" / "swift.json").read_text()
+            )
+            symbol = json.loads(
+                (archive / "data" / "documentation" / "closedrange.json").read_text()
+            )
+            self.assertEqual(landing["metadata"]["roleHeading"], "")
+            self.assertEqual(swift["metadata"]["roleHeading"], "")
+            # Non-collection pages are left untouched.
+            self.assertEqual(symbol["metadata"]["roleHeading"], "Structure")
+            self.assertEqual(scanned, 4)
+            # userdocs.json was already "", landing + swift actually changed.
+            self.assertEqual(modified, 2)
+
+    def test_override_wins_over_suppress(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_archive_with_collections(Path(tmp))
+
+            suppress_eyebrows.suppress_archive(archive, {
+                "suppress": True,
+                "overrides": {"/documentation/swift": "Standard Library"},
+            })
+
+            swift = json.loads(
+                (archive / "data" / "documentation" / "swift.json").read_text()
+            )
+            landing = json.loads(
+                (archive / "data" / "documentation.json").read_text()
+            )
+            self.assertEqual(swift["metadata"]["roleHeading"], "Standard Library")
+            self.assertEqual(landing["metadata"]["roleHeading"], "")
+
+    def test_override_applies_without_global_suppress(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_archive_with_collections(Path(tmp))
+
+            suppress_eyebrows.suppress_archive(archive, {
+                "overrides": {"/documentation": ""},
+            })
+
+            landing = json.loads(
+                (archive / "data" / "documentation.json").read_text()
+            )
+            swift = json.loads(
+                (archive / "data" / "documentation" / "swift.json").read_text()
+            )
+            self.assertEqual(landing["metadata"]["roleHeading"], "")
+            # Untouched: not overridden and global suppress is off.
+            self.assertEqual(swift["metadata"]["roleHeading"], "Framework")
+
+    def test_missing_data_dir_raises_when_config_is_active(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            not_an_archive = Path(tmp) / "NotAnArchive"
+            not_an_archive.mkdir()
+            with self.assertRaises(ValueError):
+                suppress_eyebrows.suppress_archive(
+                    not_an_archive, {"suppress": True}
+                )
+
+    def test_missing_data_dir_is_ignored_when_config_is_inactive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            not_an_archive = Path(tmp) / "NotAnArchive"
+            not_an_archive.mkdir()
+            scanned, modified = suppress_eyebrows.suppress_archive(not_an_archive)
+            self.assertEqual((scanned, modified), (0, 0))
+
+
 class TransformStaticHosting(unittest.TestCase):
     def test_invokes_docc_with_correct_args_and_replaces_in_place(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -883,7 +1003,7 @@ class FinalizeCombinedArchive(unittest.TestCase):
                 succeeded, failed = build_docs._finalize_combined_archive(
                     [archive], tmp_path, "main", ["docc"], prior_failed=[]
                 )
-        self.assertEqual(succeeded, ["combined-merge"])
+        self.assertEqual(succeeded, ["combined-merge", "eyebrow-suppression"])
         self.assertEqual(failed, ["static-hosting-transform"])
 
     def test_merge_uses_fixed_landing_page_name_regardless_of_version(self):
@@ -935,7 +1055,10 @@ class FinalizeCombinedArchive(unittest.TestCase):
                 succeeded, failed = build_docs._finalize_combined_archive(
                     [archive], tmp_path, "main", ["docc"], prior_failed=[]
                 )
-        self.assertEqual(succeeded, ["combined-merge", "static-hosting-transform"])
+        self.assertEqual(
+            succeeded,
+            ["combined-merge", "eyebrow-suppression", "static-hosting-transform"],
+        )
         self.assertEqual(failed, [])
 
     def _merge_writes_index(self, modules):
@@ -1016,7 +1139,8 @@ class FinalizeCombinedArchive(unittest.TestCase):
                 )
         self.assertEqual(
             succeeded,
-            ["combined-merge", "navigator-curation", "static-hosting-transform"],
+            ["combined-merge", "navigator-curation", "eyebrow-suppression",
+             "static-hosting-transform"],
         )
         self.assertEqual(failed, [])
 
@@ -1414,6 +1538,69 @@ class ValidateNavigation(unittest.TestCase):
             curate_navigator.validate_navigation(self._nav(), self.SOURCES), []
         )
 
+    def test_eyebrows_valid_shape_has_no_errors(self):
+        nav = self._nav(eyebrows={"suppress": True, "landing": "Project"})
+        self.assertEqual(curate_navigator.validate_navigation(nav, self.SOURCES), [])
+
+    def test_eyebrows_non_object_is_reported(self):
+        nav = self._nav(eyebrows=True)
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("'eyebrows' must be an object" in e for e in errors), errors)
+
+    def test_eyebrows_suppress_non_bool_is_reported(self):
+        nav = self._nav(eyebrows={"suppress": "yes"})
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(
+            any("'eyebrows.suppress' must be a boolean" in e for e in errors), errors
+        )
+
+    def test_eyebrows_landing_non_string_is_reported(self):
+        nav = self._nav(eyebrows={"landing": 42})
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(
+            any("'eyebrows.landing' must be a string" in e for e in errors), errors
+        )
+
+    def test_eyebrows_landing_null_is_valid(self):
+        nav = self._nav(eyebrows={"suppress": False, "landing": None})
+        self.assertEqual(curate_navigator.validate_navigation(nav, self.SOURCES), [])
+
+    def test_module_eyebrow_field_is_valid(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift", "eyebrow": "Standard Library"},
+            ]},
+        ])
+        self.assertEqual(curate_navigator.validate_navigation(nav, self.SOURCES), [])
+
+    def test_module_eyebrow_non_string_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift", "eyebrow": 7},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(
+            any("'eyebrow' that must be a string" in e for e in errors), errors
+        )
+
+    def test_hidden_module_eyebrow_field_is_valid(self):
+        nav = self._nav(hidden=[
+            {"source": "b", "path": "/documentation/internal", "eyebrow": "Framework"},
+        ])
+        self.assertEqual(curate_navigator.validate_navigation(nav, self.SOURCES), [])
+
+    def test_external_entry_eyebrow_is_reported(self):
+        nav = self._nav(groups=[
+            {"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+                {"title": "C++ Interop", "url": "https://www.swift.org/x/",
+                 "eyebrow": "Nope"},
+            ]},
+        ])
+        errors = curate_navigator.validate_navigation(nav, self.SOURCES)
+        self.assertTrue(any("has 'eyebrow'" in e for e in errors), errors)
+
     def test_unknown_source_is_reported(self):
         nav = self._nav(groups=[
             {"title": "Lang", "modules": [
@@ -1629,6 +1816,59 @@ class ValidateNavigation(unittest.TestCase):
         hidden_errors = [e for e in errors if "not valid under 'hidden'" in e]
         self.assertEqual(len(hidden_errors), 1, errors)
         self.assertFalse(any("appears more than once" in e for e in errors), errors)
+
+
+class CollectEyebrowOverrides(unittest.TestCase):
+    def test_gathers_group_and_hidden_module_eyebrows(self):
+        nav = {
+            "groups": [
+                {"title": "Lang", "modules": [
+                    {"source": "a", "path": "/documentation/swift",
+                     "eyebrow": "Standard Library"},
+                    {"source": "b", "path": "/documentation/testing"},
+                ]},
+            ],
+            "hidden": [
+                {"source": "a", "path": "/documentation/cxx", "eyebrow": "Framework"},
+            ],
+        }
+        overrides = curate_navigator.collect_eyebrow_overrides(nav)
+        self.assertEqual(overrides, {
+            "/documentation/swift": "Standard Library",
+            "/documentation/cxx": "Framework",
+        })
+
+    def test_ignores_external_entries_even_if_they_carry_eyebrow(self):
+        nav = {
+            "groups": [
+                {"title": "Lang", "modules": [
+                    {"title": "Foundation", "url": "https://developer.apple.com/x",
+                     "eyebrow": "Nope"},
+                ]},
+            ],
+            "hidden": [],
+        }
+        self.assertEqual(curate_navigator.collect_eyebrow_overrides(nav), {})
+
+    def test_landing_override_maps_to_documentation_root(self):
+        nav = {"groups": [], "hidden": [], "eyebrows": {"landing": "Project"}}
+        self.assertEqual(
+            curate_navigator.collect_eyebrow_overrides(nav),
+            {"/documentation": "Project"},
+        )
+
+    def test_no_eyebrows_block_and_no_module_eyebrows_returns_empty(self):
+        nav = {
+            "groups": [{"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+            ]}],
+            "hidden": [],
+        }
+        self.assertEqual(curate_navigator.collect_eyebrow_overrides(nav), {})
+
+    def test_landing_null_is_omitted(self):
+        nav = {"groups": [], "hidden": [], "eyebrows": {"landing": None}}
+        self.assertEqual(curate_navigator.collect_eyebrow_overrides(nav), {})
 
 
 class CurateNavigator(unittest.TestCase):
