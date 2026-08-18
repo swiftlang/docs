@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_docs  # noqa: E402
 import curate_navigator  # noqa: E402
 import strip_availability  # noqa: E402
+import strip_language_toggle  # noqa: E402
 import suppress_eyebrows  # noqa: E402
 import validate_navigation as validate_navigation_cli  # noqa: E402
 
@@ -627,6 +628,91 @@ class StripArchive(unittest.TestCase):
                 strip_availability.strip_archive(not_an_archive)
 
 
+def _make_archive_with_language_variants(root, archive_name="Swift.doccarchive"):
+    """Build a minimal .doccarchive tree with a module page carrying the
+    top-level `variants` array that drives the "Language: Swift" nav pill,
+    a docc-convert-style page with none, and an image reference whose own
+    `variants` key (light/dark asset variants) must survive untouched.
+
+    Returns the archive path.
+    """
+    archive = root / archive_name
+    doc_dir = archive / "data" / "documentation"
+    doc_dir.mkdir(parents=True)
+
+    (doc_dir / "testing.json").write_text(json.dumps({
+        "metadata": {"title": "Testing", "role": "collection"},
+        "variants": [
+            {"paths": ["/documentation/testing"],
+             "traits": [{"interfaceLanguage": "swift"}]},
+        ],
+        "references": {
+            "hero.png": {
+                "type": "image",
+                "variants": [{"traits": ["light"], "url": "/images/hero.png"}],
+            },
+        },
+    }))
+    (doc_dir / "userdocs.json").write_text(json.dumps({
+        "metadata": {"title": "VS Code", "role": "collection"},
+    }))
+
+    return archive
+
+
+class StripLanguageToggleArchive(unittest.TestCase):
+    def test_removes_top_level_variants_and_returns_counts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_archive_with_language_variants(Path(tmp))
+            scanned, modified = strip_language_toggle.strip_archive(archive)
+
+            testing = json.loads(
+                (archive / "data" / "documentation" / "testing.json").read_text()
+            )
+            self.assertNotIn("variants", testing)
+            # Unrelated keys preserved.
+            self.assertEqual(testing["metadata"]["title"], "Testing")
+
+            self.assertEqual(scanned, 2)
+            self.assertEqual(modified, 1)
+
+    def test_nested_asset_variants_are_not_touched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_archive_with_language_variants(Path(tmp))
+            strip_language_toggle.strip_archive(archive)
+
+            testing = json.loads(
+                (archive / "data" / "documentation" / "testing.json").read_text()
+            )
+            self.assertIn("variants", testing["references"]["hero.png"])
+            self.assertEqual(
+                testing["references"]["hero.png"]["variants"],
+                [{"traits": ["light"], "url": "/images/hero.png"}],
+            )
+
+    def test_archive_without_variants_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "Swift.doccarchive"
+            data_dir = archive / "data"
+            data_dir.mkdir(parents=True)
+            payload = {"metadata": {"title": "X"}, "kind": "article"}
+            (data_dir / "x.json").write_text(json.dumps(payload))
+
+            scanned, modified = strip_language_toggle.strip_archive(archive)
+            self.assertEqual(scanned, 1)
+            self.assertEqual(modified, 0)
+            self.assertEqual(
+                json.loads((data_dir / "x.json").read_text()), payload
+            )
+
+    def test_missing_data_dir_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            not_an_archive = Path(tmp) / "NotAnArchive"
+            not_an_archive.mkdir()
+            with self.assertRaises(ValueError):
+                strip_language_toggle.strip_archive(not_an_archive)
+
+
 def _make_archive_with_collections(root, archive_name="Combined.doccarchive"):
     """Build a minimal merged .doccarchive tree with two module landing pages,
     the synthesized combined landing page, and one non-collection page.
@@ -994,7 +1080,8 @@ class FinalizeCombinedArchive(unittest.TestCase):
                 # First call is `docc merge`; succeed by creating output dir.
                 if "merge" in cmd:
                     out_idx = cmd.index("--output-path") + 1
-                    Path(cmd[out_idx]).mkdir(parents=True, exist_ok=True)
+                    out = Path(cmd[out_idx])
+                    (out / "data").mkdir(parents=True, exist_ok=True)
                     return subprocess.CompletedProcess(cmd, 0)
                 # Second call is the transform; fail.
                 raise subprocess.CalledProcessError(1, cmd)
@@ -1003,7 +1090,10 @@ class FinalizeCombinedArchive(unittest.TestCase):
                 succeeded, failed = build_docs._finalize_combined_archive(
                     [archive], tmp_path, "main", ["docc"], prior_failed=[]
                 )
-        self.assertEqual(succeeded, ["combined-merge", "eyebrow-suppression"])
+        self.assertEqual(
+            succeeded,
+            ["combined-merge", "eyebrow-suppression", "language-toggle-suppression"],
+        )
         self.assertEqual(failed, ["static-hosting-transform"])
 
     def test_merge_uses_fixed_landing_page_name_regardless_of_version(self):
@@ -1029,7 +1119,7 @@ class FinalizeCombinedArchive(unittest.TestCase):
             name_idx = merge_cmd.index("--synthesized-landing-page-name") + 1
             self.assertEqual(merge_cmd[name_idx], "Swift Documentation")
 
-    def test_full_success_records_both_steps(self):
+    def test_full_success_records_all_steps(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             archive = tmp_path / "a.doccarchive"
@@ -1041,6 +1131,7 @@ class FinalizeCombinedArchive(unittest.TestCase):
                     out_idx = cmd.index("--output-path") + 1
                     out = Path(cmd[out_idx])
                     out.mkdir(parents=True, exist_ok=True)
+                    (out / "data").mkdir(parents=True, exist_ok=True)
                     (out / "index.html").write_text("merged")
                     return subprocess.CompletedProcess(cmd, 0)
                 # Transform step: simulate docc producing the transformed
@@ -1057,9 +1148,35 @@ class FinalizeCombinedArchive(unittest.TestCase):
                 )
         self.assertEqual(
             succeeded,
-            ["combined-merge", "eyebrow-suppression", "static-hosting-transform"],
+            ["combined-merge", "eyebrow-suppression", "language-toggle-suppression",
+             "static-hosting-transform"],
         )
         self.assertEqual(failed, [])
+
+    def test_language_toggle_suppression_failure_records_only_that_step(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+            (archive / "index.html").write_text("ok")
+
+            def fake_run(cmd, **kw):
+                out_idx = cmd.index("--output-path") + 1
+                out = Path(cmd[out_idx])
+                out.mkdir(parents=True, exist_ok=True)
+                (out / "index.html").write_text("merged")
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                with mock.patch.object(
+                    build_docs, "strip_language_toggle_archive",
+                    side_effect=OSError("boom"),
+                ):
+                    succeeded, failed = build_docs._finalize_combined_archive(
+                        [archive], tmp_path, "main", ["docc"], prior_failed=[]
+                    )
+        self.assertEqual(succeeded, ["combined-merge", "eyebrow-suppression"])
+        self.assertEqual(failed, ["language-toggle-suppression"])
 
     def _merge_writes_index(self, modules):
         """Build a fake subprocess.run that writes a merged index.json on merge.
@@ -1074,6 +1191,7 @@ class FinalizeCombinedArchive(unittest.TestCase):
             out.mkdir(parents=True, exist_ok=True)
             if "merge" in cmd:
                 (out / "index").mkdir(parents=True, exist_ok=True)
+                (out / "data").mkdir(parents=True, exist_ok=True)
                 doc = {
                     "schemaVersion": {"major": 0, "minor": 1, "patch": 2},
                     "interfaceLanguages": {
@@ -1140,7 +1258,7 @@ class FinalizeCombinedArchive(unittest.TestCase):
         self.assertEqual(
             succeeded,
             ["combined-merge", "navigator-curation", "eyebrow-suppression",
-             "static-hosting-transform"],
+             "language-toggle-suppression", "static-hosting-transform"],
         )
         self.assertEqual(failed, [])
 

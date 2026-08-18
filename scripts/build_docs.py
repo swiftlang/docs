@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from strip_availability import strip_archive
+from strip_language_toggle import strip_archive as strip_language_toggle_archive
 from suppress_eyebrows import suppress_archive as suppress_eyebrow_archive
 from curate_navigator import (
     curate_navigator,
@@ -850,6 +851,18 @@ def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd,
         return prior_steps, ["eyebrow-suppression"]
 
     prior_steps.append("eyebrow-suppression")
+
+    try:
+        scanned, modified = strip_language_toggle_archive(combined_output)
+        print(
+            f"Language toggle suppression: scanned {scanned} file(s), "
+            f"modified {modified}."
+        )
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Error: language toggle suppression failed: {e}")
+        return prior_steps, ["language-toggle-suppression"]
+
+    prior_steps.append("language-toggle-suppression")
 
     try:
         transform_static_hosting(combined_output, hosting_base_path or version_slug, docc_cmd)
