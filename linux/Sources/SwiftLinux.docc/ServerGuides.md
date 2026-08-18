@@ -4,7 +4,7 @@ Build, package, and deploy Swift applications for Linux servers and cloud infras
 
 ## Tutorials
 
-- [Get Started with Swift Server](https://docs.swift.org/latest/tutorials/getting-started-swift-server) — Explore Swift on the server by building a Vapor app.
+- [Get Started with Swift Server](https://www.swift.org/getting-started/vapor-web-server/) — Explore Swift on the server by building a Vapor app.
 
 ## Topics
 
