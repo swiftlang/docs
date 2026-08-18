@@ -10,8 +10,8 @@ Official libraries maintained by the Swift project.
 ## Concurrency and process libraries
 
 - [swift-subprocess](https://swiftpackageindex.com/swiftlang/swift-subprocess) — Cross-platform process spawning package
-- [swift-platform-executors](https://swiftpackageindex.com/swiftlang/swift-platform-executors) — Platform-native executors for Swift Concurrency
-- [swift-corelibs-libdispatch](https://swiftpackageindex.com/swiftlang/swift-corelibs-libdispatch) — Grand Central Dispatch for multicore concurrency
+- [swift-platform-executors](https://github.com/swiftlang/swift-platform-executors) — Platform-native executors for Swift Concurrency
+- [swift-corelibs-libdispatch](https://github.com/swiftlang/swift-corelibs-libdispatch) — Grand Central Dispatch for multicore concurrency
 
 ## Source parsing and text libraries
 
