@@ -49,7 +49,7 @@ def _validate(config):
 
 def _wrap(entry):
     return {
-        "version": {"slug": "main", "descriptive-name": "prototype"},
+        "version": {"slug": "main"},
         "sources": [entry],
     }
 
@@ -67,11 +67,11 @@ class ValidateVersionField(unittest.TestCase):
         }
 
     def test_valid_version_object(self):
-        output = _validate(self._config({"slug": "main", "descriptive-name": "prototype"}))
+        output = _validate(self._config({"slug": "main"}))
         self.assertIsNone(output)
 
     def test_version_missing_is_rejected(self):
-        config = self._config({"slug": "main", "descriptive-name": "prototype"})
+        config = self._config({"slug": "main"})
         del config["version"]
         output = _validate(config)
         self.assertIsNotNone(output)
@@ -83,14 +83,9 @@ class ValidateVersionField(unittest.TestCase):
         self.assertIn("version", output)
 
     def test_version_missing_slug_is_rejected(self):
-        output = _validate(self._config({"descriptive-name": "prototype"}))
+        output = _validate(self._config({}))
         self.assertIsNotNone(output)
         self.assertIn("slug", output)
-
-    def test_version_missing_descriptive_name_is_rejected(self):
-        output = _validate(self._config({"slug": "main"}))
-        self.assertIsNotNone(output)
-        self.assertIn("descriptive-name", output)
 
 
 class ValidateArchiveType(unittest.TestCase):
@@ -1632,7 +1627,7 @@ def _children_of(archive, lang="swift"):
 
 class ValidateNavigation(unittest.TestCase):
     SOURCES = {
-        "version": {"slug": "main", "descriptive-name": "prototype"},
+        "version": {"slug": "main"},
         "sources": [{"id": "a"}, {"id": "b"}],
     }
 
@@ -2298,7 +2293,7 @@ class CurateNavigatorDryRun(unittest.TestCase):
 
 
 class AutoArchiveVersionSlug(unittest.TestCase):
-    """_auto_archive must resolve the {slug, descriptive-name} version object."""
+    """_auto_archive must resolve the {slug} version object."""
 
     def _sources_path(self, tmp_path):
         scripts_dir = tmp_path / "scripts"
@@ -2310,7 +2305,7 @@ class AutoArchiveVersionSlug(unittest.TestCase):
             tmp_path = Path(tmp)
             sources_path = self._sources_path(tmp_path)
             sources = {
-                "version": {"slug": "main", "descriptive-name": "prototype"},
+                "version": {"slug": "main"},
                 "sources": [],
             }
             index_dir = tmp_path / ".build-output" / "main" / "index"
@@ -2325,7 +2320,7 @@ class AutoArchiveVersionSlug(unittest.TestCase):
             tmp_path = Path(tmp)
             sources_path = self._sources_path(tmp_path)
             sources = {
-                "version": {"descriptive-name": "prototype"},
+                "version": {},
                 "sources": [],
             }
             self.assertIsNone(validate_navigation_cli._auto_archive(sources, sources_path))
@@ -2352,7 +2347,7 @@ class ValidateNavigationCLI(unittest.TestCase):
         return argv
 
     SOURCES = {
-        "version": {"slug": "main", "descriptive-name": "prototype"},
+        "version": {"slug": "main"},
         "sources": [{"id": "a"}, {"id": "b"}],
     }
 

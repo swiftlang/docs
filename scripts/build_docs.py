@@ -148,18 +148,10 @@ def validate_sources(config):
     if "version" not in config:
         errors.append("Top-level 'version' field is missing")
     elif not isinstance(config["version"], dict):
-        errors.append(
-            "Top-level 'version' field must be an object with 'slug' and "
-            "'descriptive-name'"
-        )
+        errors.append("Top-level 'version' field must be an object with 'slug'")
     else:
         if not config["version"].get("slug"):
             errors.append("Top-level 'version' object is missing 'slug'")
-        # 'descriptive-name' is validated and recorded in build-manifest.json but
-        # not otherwise consumed by the build; reserved for a future narrative use
-        # (e.g. re-introducing a landing-page blurb — see hacking-synthesized-landing-page.md).
-        if not config["version"].get("descriptive-name"):
-            errors.append("Top-level 'version' object is missing 'descriptive-name'")
 
     if "sources" not in config:
         errors.append("Top-level 'sources' field is missing")

@@ -3,9 +3,7 @@
 > **Status: not currently wired up.** `set_version_paragraph()` and its call
 > from `_finalize_combined_archive()` have been removed from the build
 > scripts — the combined archive's landing page no longer gets a "Swift
-> version: X" paragraph injected. `sources.json`'s `version.descriptive-name`
-> is still validated and recorded in `build-manifest.json`, but nothing reads
-> it to alter documentation content. The mechanics below (verified against
+> version: X" paragraph injected. The mechanics below (verified against
 > `swift-docc` source) remain accurate if this is revisited.
 
 Companion to `hacking-index-json.md` (sidebar/navigator). This file covers the
@@ -101,43 +99,18 @@ This renders as normal running prose **above the Topics section** and below
 the title/role-heading — it is body content, not the short one-line
 `abstract` teaser (a separate, also-currently-absent top-level key).
 
-## Where this lives in our pipeline
+## Ordering constraint: run before the static-hosting transform
 
-`scripts/curate_navigator.py` → `set_version_paragraph(archive_path, text)`:
-reads `data/documentation.json`, unconditionally replaces
-`doc["primaryContentSections"]` with a single content section containing one
-paragraph, writes atomically. No-op if the file is missing. Because it
-replaces the array wholesale rather than appending, calling it repeatedly
-(e.g. re-running the build) is idempotent — it does not accumulate
-paragraphs.
-
-Called from `scripts/build_docs.py` → `_finalize_combined_archive()`,
-**unconditionally** (not gated on `navigation.json` existing, unlike
-`curate_navigator()`/topic-section curation), right after `merge_archives()`
-succeeds and before the static-hosting transform:
-
-```python
-descriptive_name = (version or {}).get("descriptive-name")
-if descriptive_name:
-    set_version_paragraph(combined_output, f"Swift version: {descriptive_name}")
-```
-
-`version` is the full `sources.json` `"version"` object
-(`{"slug": ..., "descriptive-name": ...}`); the text is built here in
-`build_docs.py`, not inside `curate_navigator.py`, so `set_version_paragraph`
-stays a generic "set this text as the landing page body" primitive.
-
-### Why it must run before the static-hosting transform
-
-`transform_static_hosting()` runs `docc process-archive
-transform-for-static-hosting`, which produces a **fresh archive** at a temp
-path and then replaces the original wholesale (`shutil.rmtree` +
-`shutil.move`). Whatever is in `data/documentation.json` at the time that
-command runs is what gets baked into the final per-route HTML; editing the
-JSON afterward doesn't help because the static-hosting archive may not carry
-the same `data/*.json` structure forward. Same ordering constraint as
-`curate_navigator()`'s landing-page section rewriting — see
-`hacking-index-json.md`.
+Any script that edits `data/documentation.json` — a future reimplementation
+of this recipe included — must run before `transform_static_hosting()`.
+That function runs `docc process-archive transform-for-static-hosting`,
+which produces a **fresh archive** at a temp path and then replaces the
+original wholesale (`shutil.rmtree` + `shutil.move`). Whatever is in
+`data/documentation.json` at the time that command runs is what gets baked
+into the final per-route HTML; editing the JSON afterward doesn't help
+because the static-hosting archive may not carry the same `data/*.json`
+structure forward. Same ordering constraint as `curate_navigator()`'s
+landing-page section rewriting — see `hacking-index-json.md`.
 
 ## Extending this further
 
@@ -172,7 +145,7 @@ published at <https://heckj.github.io/DocCArchive/>.
   the title) — also omitted when empty on the synthesized landing page. Don't
   conflate it with `primaryContentSections`; this doc's approach targets body
   prose, not the teaser line.
-- **Ordering vs. navigator curation:** `set_version_paragraph()` and
+- **Ordering vs. navigator curation:** a landing-page-body rewrite and
   `curate_navigator()` both rewrite `data/documentation.json` but touch
   disjoint keys (`primaryContentSections` vs. `topicSections`/`references`),
   so call order between them doesn't matter — verified by both being simple

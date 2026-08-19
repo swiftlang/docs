@@ -12,13 +12,18 @@ python3 -m http.server 8123 --directory .build-output
 Then in another terminal:
 
 ```bash
-open http://localhost:8123/main/documentation/
+open http://localhost:8123/latest/documentation/
 ```
 
-Serve from `.build-output` (the parent), not `.build-output/main`: the build
-bakes a `/main/` hosting base path into every asset URL, so the `/main/` prefix
-must map to the `main/` directory. This example avoids port 8000, which can be 
-commonly used by other apps or examples. 
+Serve from `.build-output` (the parent), not `.build-output/latest`: the build
+bakes a `/latest/` hosting base path into every asset URL, so the `/latest/`
+prefix must map to the `latest/` directory. This example avoids port 8000,
+which can be commonly used by other apps or examples. 
+
+> Note: Ensure that you have a version of Swift available that will build the 
+> content that you point at in sources.json. For latest development tree builds,
+> that typically requires either the latest Xcode beta or a Swift nightly development
+> build to support Swift, SwiftPM, swift-testing, and other core projects.
 
 ## Navigation manifest (combined sidebar curation)
 
