@@ -36,7 +36,7 @@ from the main page's module list as well as the sidebar. Each entry names a
 in the merged index must be either placed in a group or listed under `hidden` —
 `build_docs.py` validates and applies this automatically (the
 `navigator-curation` build step), and fails the build on any mismatch or
-uncovered module. See `../hacking-index-json.md` for the underlying mechanics.
+uncovered module. See `hacking-index-json.md` for the underlying mechanics.
 
 A group's `title` is optional — omit it (or set it to `null`) for a headerless
 group whose modules render with no section label in either the sidebar or the
