@@ -76,3 +76,17 @@ python3 scripts/validate_navigation.py --archive path/to/combined.doccarchive
 
 `--navigation` and `--sources` can override the input files for experimentation.
 
+## Building multiple branches (main + release branches)
+
+`build_documentation.yml`'s `build-docs` job builds two variants of
+the documentation - using a matrix keyed by branch - for `main` and the latest
+release branch (such as `release/6.4.x.
+
+There isn't a shared multi-version file or `--sources` override — each release branch
+owns and maintains its own manifest.
+
+### Adding a new release branch
+
+When a new release branch gets established, we start with branch creation, update its
+`sources.json`, then add or update the entry to the `matrix.include` list in
+`build_documentation.yml` on `main`.
