@@ -23,12 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/cache@v6
-        with:
-          path: .workspace
-          key: docs-workspace-${{ hashFiles('scripts/sources.json') }}
-          restore-keys: |
-            docs-workspace-
+      # - uses: actions/cache@v6
+      #   with:
+      #     path: .workspace
+      #     key: docs-workspace-${{ hashFiles('scripts/sources.json') }}
+      #     restore-keys: |
+      #       docs-workspace-
 
       - name: Install Python
         run: apt-get update && apt-get install -y python3
