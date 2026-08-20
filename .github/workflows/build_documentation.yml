@@ -19,8 +19,7 @@ jobs:
     if: github.event_name != 'schedule' || github.repository == 'swiftlang/docs'
     runs-on: ubuntu-latest
     container:
-      # image: swiftlang/swift:nightly-main-jammy
-      image: swift:6.3
+      image: swiftlang/swift:nightly-main-jammy
     steps:
       - uses: actions/checkout@v7
 
