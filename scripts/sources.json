@@ -38,14 +38,14 @@
       "id": "swiftpm",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-package-manager.git",
-      "ref": "release/6.3",
+      "ref": "main",
       "targets": ["PackageManagerDocs", "PackageDescription", "PackagePlugin"]
     },
     {
       "id": "swift-testing",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-testing.git",
-      "ref": "release/6.3",
+      "ref": "main",
       "targets": ["Testing"],
       "add_docc_plugin": true
     },
