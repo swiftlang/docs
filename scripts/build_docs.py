@@ -458,12 +458,44 @@ def find_doccarchive(search_dir, target):
     return None
 
 
+def _docc_plugin_resolves(source_dir, swift_cmd):
+    """Check whether swift-docc-plugin is in the resolved dependency graph.
+
+    Uses `swift package describe --type json`, which evaluates Package.swift
+    under the real build environment — unlike a text search, this catches a
+    dependency that was added into an inactive branch of a conditional
+    expression (e.g. a manifest with two 'dependencies:' arrays gated by an
+    env-var flag).
+    """
+    try:
+        result = subprocess.run(
+            swift_cmd + ["package", "describe", "--type", "json"],
+            cwd=str(source_dir), capture_output=True, text=True, check=True,
+        )
+        pkg_info = json.loads(result.stdout)
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        return False
+    return any(
+        "swift-docc-plugin" in dep.get("url", "")
+        for dep in pkg_info.get("dependencies", [])
+    )
+
+
 def add_docc_plugin(source_dir, swift_cmd):
-    """Inject swift-docc-plugin dependency if not already present."""
+    """Inject swift-docc-plugin dependency if not already present.
+
+    Verifies the dependency actually resolves after `add-dependency` runs.
+    Some manifests have more than one 'dependencies:' array (e.g. a ternary
+    gated on a local-dependencies flag); `swift package add-dependency` can
+    add the entry to a branch that isn't active in this build, in which case
+    the entry is relocated into the first 'dependencies:' array instead.
+    """
     package_swift = source_dir / "Package.swift"
-    if "swift-docc-plugin" in package_swift.read_text():
+    before = package_swift.read_text()
+    if "swift-docc-plugin" in before:
         print("swift-docc-plugin dependency already present, skipping.")
         return
+
     print("Adding swift-docc-plugin dependency...")
     subprocess.run(
         swift_cmd + [
@@ -474,6 +506,39 @@ def add_docc_plugin(source_dir, swift_cmd):
         cwd=str(source_dir),
         check=True,
     )
+
+    if _docc_plugin_resolves(source_dir, swift_cmd):
+        return
+
+    print(
+        "  swift-docc-plugin did not resolve after being added — the "
+        "manifest likely has more than one 'dependencies:' array; "
+        "relocating it into the first one..."
+    )
+    after = package_swift.read_text()
+    added_lines = [
+        line for line in after.splitlines(keepends=True)
+        if "swift-docc-plugin" in line
+    ]
+    if len(added_lines) != 1:
+        raise RuntimeError(
+            "could not isolate the swift-docc-plugin line added by "
+            "'swift package add-dependency' in Package.swift"
+        )
+    plugin_line = added_lines[0]
+
+    without_line = after.replace(plugin_line, "", 1)
+    marker = without_line.index("dependencies:")
+    bracket = without_line.index("[", marker) + 1
+    fixed = without_line[:bracket] + "\n" + plugin_line.strip() + without_line[bracket:]
+    package_swift.write_text(fixed)
+
+    if not _docc_plugin_resolves(source_dir, swift_cmd):
+        raise RuntimeError(
+            "swift-docc-plugin still does not resolve after relocating it "
+            "into the first 'dependencies:' array in Package.swift"
+        )
+    print("  Relocated swift-docc-plugin into the active dependencies array.")
 
 
 def _build_archive_source(source, workspace, temp_archive_dir):

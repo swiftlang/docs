@@ -975,6 +975,186 @@ class CollectGitMetadata(unittest.TestCase):
         self.assertEqual(commit, "unknown")
 
 
+class DoccPluginResolves(unittest.TestCase):
+    def test_true_when_dependency_present(self):
+        def fake_run(cmd, **kw):
+            payload = json.dumps({
+                "dependencies": [
+                    {"url": "https://github.com/swiftlang/swift-docc-plugin"},
+                ]
+            })
+            return subprocess.CompletedProcess(cmd, 0, stdout=payload, stderr="")
+
+        with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+            self.assertTrue(
+                build_docs._docc_plugin_resolves(Path("/tmp/x"), ["swift"])
+            )
+
+    def test_false_when_dependency_absent(self):
+        def fake_run(cmd, **kw):
+            payload = json.dumps({
+                "dependencies": [
+                    {"url": "https://github.com/swiftlang/swift-syntax.git"},
+                ]
+            })
+            return subprocess.CompletedProcess(cmd, 0, stdout=payload, stderr="")
+
+        with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+            self.assertFalse(
+                build_docs._docc_plugin_resolves(Path("/tmp/x"), ["swift"])
+            )
+
+    def test_false_when_describe_fails(self):
+        def fake_run(cmd, **kw):
+            raise subprocess.CalledProcessError(1, cmd)
+
+        with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+            self.assertFalse(
+                build_docs._docc_plugin_resolves(Path("/tmp/x"), ["swift"])
+            )
+
+    def test_false_when_describe_output_is_not_json(self):
+        def fake_run(cmd, **kw):
+            return subprocess.CompletedProcess(cmd, 0, stdout="not json", stderr="")
+
+        with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+            self.assertFalse(
+                build_docs._docc_plugin_resolves(Path("/tmp/x"), ["swift"])
+            )
+
+
+class AddDoccPlugin(unittest.TestCase):
+    def _describe_result(self, cmd, has_plugin):
+        deps = [{"url": "https://github.com/swiftlang/swift-syntax.git"}]
+        if has_plugin:
+            deps.append({"url": "https://github.com/swiftlang/swift-docc-plugin"})
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout=json.dumps({"dependencies": deps}), stderr=""
+        )
+
+    def test_skips_when_already_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp)
+            (source_dir / "Package.swift").write_text(
+                'dependencies: [\n    .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0"),\n],\n'
+            )
+            with mock.patch.object(build_docs.subprocess, "run") as run:
+                build_docs.add_docc_plugin(source_dir, ["swift"])
+            run.assert_not_called()
+
+    def test_no_relocation_needed_when_plugin_resolves(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp)
+            package_swift = source_dir / "Package.swift"
+            package_swift.write_text(
+                'dependencies: [\n'
+                '    .package(url: "https://example.com/a.git", from: "1.0.0"),\n'
+                '],\n'
+            )
+
+            def fake_run(cmd, **kw):
+                if "add-dependency" in cmd:
+                    text = package_swift.read_text()
+                    text = text.replace(
+                        '.package(url: "https://example.com/a.git", from: "1.0.0"),',
+                        '.package(url: "https://example.com/a.git", from: "1.0.0"),\n'
+                        '    .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0"),',
+                    )
+                    package_swift.write_text(text)
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                return self._describe_result(cmd, has_plugin=True)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                build_docs.add_docc_plugin(source_dir, ["swift"])
+
+            final = package_swift.read_text()
+            self.assertEqual(final.count("swift-docc-plugin"), 1)
+
+    def test_relocates_when_added_into_inactive_branch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp)
+            package_swift = source_dir / "Package.swift"
+            package_swift.write_text(
+                'dependencies: cond ? [\n'
+                '    .package(url: "https://example.com/active.git", from: "1.0.0"),\n'
+                '] : [\n'
+                '    .package(path: "../active"),\n'
+                '],\n'
+            )
+            describe_results = iter([False, True])
+
+            def fake_run(cmd, **kw):
+                if "add-dependency" in cmd:
+                    text = package_swift.read_text()
+                    text = text.replace(
+                        '.package(path: "../active"),',
+                        '.package(path: "../active"),\n'
+                        '    .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0"),',
+                    )
+                    package_swift.write_text(text)
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                return self._describe_result(cmd, has_plugin=next(describe_results))
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                build_docs.add_docc_plugin(source_dir, ["swift"])
+
+            final = package_swift.read_text()
+            self.assertEqual(final.count("swift-docc-plugin"), 1)
+            self.assertLess(
+                final.index("swift-docc-plugin"), final.index("../active"),
+                "plugin dependency should have been relocated into the first array",
+            )
+
+    def test_raises_when_still_unresolved_after_relocation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp)
+            package_swift = source_dir / "Package.swift"
+            package_swift.write_text(
+                'dependencies: cond ? [\n'
+                '    .package(url: "https://example.com/active.git", from: "1.0.0"),\n'
+                '] : [\n'
+                '    .package(path: "../active"),\n'
+                '],\n'
+            )
+
+            def fake_run(cmd, **kw):
+                if "add-dependency" in cmd:
+                    text = package_swift.read_text()
+                    text = text.replace(
+                        '.package(path: "../active"),',
+                        '.package(path: "../active"),\n'
+                        '    .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0"),',
+                    )
+                    package_swift.write_text(text)
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                return self._describe_result(cmd, has_plugin=False)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                with self.assertRaises(RuntimeError):
+                    build_docs.add_docc_plugin(source_dir, ["swift"])
+
+    def test_raises_when_added_line_not_isolatable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp)
+            package_swift = source_dir / "Package.swift"
+            package_swift.write_text('dependencies: [\n],\n')
+
+            def fake_run(cmd, **kw):
+                if "add-dependency" in cmd:
+                    package_swift.write_text(
+                        'dependencies: [\n'
+                        '    .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0"),\n'
+                        '    // swift-docc-plugin duplicate mention\n'
+                        '],\n'
+                    )
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                return self._describe_result(cmd, has_plugin=False)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                with self.assertRaises(RuntimeError):
+                    build_docs.add_docc_plugin(source_dir, ["swift"])
+
+
 class MergeArchives(unittest.TestCase):
     def _capture_merge_cmd(self, version):
         """Run merge_archives with a stubbed subprocess and return the cmd."""
