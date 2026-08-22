@@ -14,7 +14,7 @@
     {
       "id": "swift-stdlib",
       "type": "archive",
-      "url": "https://download.swift.org/docs/main/swift_docc.zip",
+      "url": "https://download.swift.org/docs/release/6.4.x/swift_docc.zip",
       "format": "zip",
       "docc_archive_name": "Swift.doccarchive",
       "strip_availability": true
