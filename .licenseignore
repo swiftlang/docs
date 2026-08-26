@@ -1,4 +1,5 @@
 **/*.gitkeep
 **/*.html
+**/*.svg
 **/Package.swift
 common/README
