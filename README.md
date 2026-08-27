@@ -21,8 +21,8 @@ This repository isn't meant for consumable libraries, any documentation for a Sw
 This library hosts general content related to the Swift language, guides, and cross-cutting details that support the Swift ecosystem more broadly.
 Each of the catalogs is matched with an entry in the [CODEOWNERS][codeowners] file, which provides the technical reviewers for that catalog.
 
-Each directory has it's own Swift package in order to support a full breadth of tooling for documentation and examples, including snippets. 
-The packages in this repository aren't meant to be depended upon or provide library. 
+Each directory has its own Swift package in order to support a full breadth of tooling for documentation and examples, including snippets.
+The packages in this repository aren't meant to be depended upon or provide a library.
 
 ## How you can help
 
