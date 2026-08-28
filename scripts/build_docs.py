@@ -28,6 +28,7 @@ from collections import namedtuple
 from datetime import datetime, timezone
 from pathlib import Path
 
+from inject_canonical_link import canonicalize_archive as canonicalize_link_archive
 from strip_availability import strip_archive
 from strip_language_toggle import strip_archive as strip_language_toggle_archive
 from suppress_eyebrows import suppress_archive as suppress_eyebrow_archive
@@ -95,6 +96,15 @@ def parse_args():
         metavar="PREFIX",
         help="Prepend a path segment to the hosting base path (e.g. 'docs' → 'docs/main'). "
              "Does not affect the output directory name or landing page title.",
+    )
+    parser.add_argument(
+        "--canonical-base-url",
+        default=None,
+        metavar="URL",
+        help="Base URL for a <link rel=\"canonical\"> tag injected into every page "
+             "of the combined archive (e.g. 'https://docs.swift.org/latest'). "
+             "Every build should point at the same canonical copy, regardless of "
+             "which version this build itself is. Omit to skip injection.",
     )
     return parser.parse_args()
 
@@ -842,7 +852,7 @@ def inject_custom_templates_into_stubs(archive_path, common_dir):
     return patched
 
 
-def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd, prior_failed, common_dir=None, navigation=None, hosting_base_path=None):
+def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd, prior_failed, common_dir=None, navigation=None, hosting_base_path=None, canonical_base_url=None):
     """Merge per-source archives and apply the static-hosting transform.
 
     Returns (succeeded_steps, failed_steps): names that should be added to
@@ -933,6 +943,16 @@ def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd,
         print(f"Patched custom-header/footer into {patched} per-route stub(s).")
 
     prior_steps.append("static-hosting-transform")
+
+    if canonical_base_url:
+        try:
+            scanned, modified = canonicalize_link_archive(combined_output, canonical_base_url)
+            print(f"Canonical link injection: scanned {scanned} file(s), modified {modified}.")
+        except (OSError, ValueError) as e:
+            print(f"Error: canonical link injection failed: {e}")
+            return prior_steps, ["canonical-link-injection"]
+        prior_steps.append("canonical-link-injection")
+
     return prior_steps, []
 
 
@@ -1118,6 +1138,7 @@ def main():
             all_archives, output_dir, version_slug, tools.docc, failed,
             common_dir=common_dir, navigation=navigation,
             hosting_base_path=hosting_base_path,
+            canonical_base_url=args.canonical_base_url,
         )
         succeeded.extend(s_steps)
         failed.extend(f_steps)
