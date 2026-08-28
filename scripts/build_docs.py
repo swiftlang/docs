@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tarfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from collections import namedtuple
@@ -154,15 +155,6 @@ def validate_sources(config):
         if not config["version"].get("slug"):
             errors.append("Top-level 'version' object is missing 'slug'")
 
-    if "canonical_base_url" in config:
-        canonical_base_url = config["canonical_base_url"]
-        if not isinstance(canonical_base_url, str) or not canonical_base_url:
-            errors.append("Top-level 'canonical_base_url' field must be a non-empty string")
-        elif not canonical_base_url.startswith(("http://", "https://")):
-            errors.append(
-                "Top-level 'canonical_base_url' must be an absolute http(s) URL"
-            )
-
     if "sources" not in config:
         errors.append("Top-level 'sources' field is missing")
         return errors
@@ -279,6 +271,36 @@ def validate_sources(config):
                         )
 
     return errors
+
+
+def _resolve_canonical_base_url(config):
+    """Return config's 'canonical_base_url' if present and well-formed, else None.
+
+    A missing field is silent — canonical-link injection just doesn't run.
+    A malformed field (wrong type, empty, no scheme, no host) prints an
+    explicit warning to stdout — so it shows up in the build script's own
+    output and therefore in CI logs — and disables injection for this build
+    rather than failing the whole documentation build over what's purely an
+    SEO metadata concern.
+    """
+    canonical_base_url = config.get("canonical_base_url")
+    if canonical_base_url is None:
+        return None
+
+    if isinstance(canonical_base_url, str):
+        parsed = urllib.parse.urlparse(canonical_base_url)
+    else:
+        parsed = None
+
+    if parsed and parsed.scheme in ("http", "https") and parsed.netloc:
+        return canonical_base_url
+
+    print(
+        f"Warning: 'canonical_base_url' ({canonical_base_url!r}) is not a valid "
+        "absolute http(s) URL (expected e.g. 'https://docs.swift.org/latest'); "
+        "skipping canonical link injection."
+    )
+    return None
 
 
 def clean_package_build_dirs(root_dir, sources):
@@ -1056,7 +1078,7 @@ def main():
     version = config["version"]
     version_slug = version["slug"]
     hosting_base_path = f"{args.extra_hosting_prefix}/{version_slug}" if args.extra_hosting_prefix else version_slug
-    canonical_base_url = config.get("canonical_base_url")
+    canonical_base_url = _resolve_canonical_base_url(config)
     sources = config["sources"]
 
     # Ensure consistent, pretty-printed DocC JSON output

@@ -45,6 +45,7 @@ import html
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 CANONICAL_LINK_RE = re.compile(r'<link rel="canonical" href="[^"]*">')
@@ -56,6 +57,24 @@ def _route_for(index_html_path, archive_root):
     """
     route_dir = index_html_path.parent.relative_to(archive_root)
     return route_dir.as_posix() if route_dir != Path(".") else ""
+
+
+def _atomic_write(path, text):
+    """Write `text` to `path` via a same-directory tempfile + os.replace, so a
+    failure partway through never leaves `path` truncated or corrupted.
+    """
+    dir_ = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(prefix=".inject-canonical-link-", dir=dir_)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def canonicalize_archive(archive_path, canonical_base_url):
@@ -88,7 +107,7 @@ def canonicalize_archive(archive_path, canonical_base_url):
             f'<link rel="canonical" href="{html.escape(canonical_url, quote=True)}">'
         )
 
-        text = index_path.read_text()
+        text = index_path.read_text(encoding="utf-8")
         if CANONICAL_LINK_RE.search(text):
             new_text = CANONICAL_LINK_RE.sub(new_tag, text, count=1)
         elif "</head>" in text:
@@ -97,7 +116,7 @@ def canonicalize_archive(archive_path, canonical_base_url):
             continue
 
         if new_text != text:
-            index_path.write_text(new_text)
+            _atomic_write(index_path, new_text)
             files_modified += 1
 
     return files_scanned, files_modified
@@ -114,7 +133,7 @@ def main():
     canonical_base_url = sys.argv[2]
     try:
         files_scanned, files_modified = canonicalize_archive(archive, canonical_base_url)
-    except ValueError as e:
+    except (OSError, ValueError) as e:
         sys.stderr.write(f"error: {e}\n")
         sys.exit(1)
 
