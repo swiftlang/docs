@@ -89,6 +89,45 @@ class ValidateVersionField(unittest.TestCase):
         self.assertIn("slug", output)
 
 
+class ValidateCanonicalBaseUrlField(unittest.TestCase):
+    def _config(self, canonical_base_url=None):
+        config = {
+            "version": {"slug": "main"},
+            "sources": [{
+                "id": "stdlib",
+                "type": "archive",
+                "url": "https://example.com/Swift.doccarchive.tar.gz",
+                "docc_archive_name": "Swift.doccarchive",
+            }],
+        }
+        if canonical_base_url is not None:
+            config["canonical_base_url"] = canonical_base_url
+        return config
+
+    def test_omitted_is_valid(self):
+        output = _validate(self._config())
+        self.assertIsNone(output)
+
+    def test_valid_https_url_is_accepted(self):
+        output = _validate(self._config("https://docs.swift.org/latest"))
+        self.assertIsNone(output)
+
+    def test_non_string_is_rejected(self):
+        output = _validate(self._config({"not": "a string"}))
+        self.assertIsNotNone(output)
+        self.assertIn("canonical_base_url", output)
+
+    def test_empty_string_is_rejected(self):
+        output = _validate(self._config(""))
+        self.assertIsNotNone(output)
+        self.assertIn("canonical_base_url", output)
+
+    def test_non_absolute_url_is_rejected(self):
+        output = _validate(self._config("docs.swift.org/latest"))
+        self.assertIsNotNone(output)
+        self.assertIn("canonical_base_url", output)
+
+
 class ValidateArchiveType(unittest.TestCase):
     def test_minimal_valid(self):
         entry = {

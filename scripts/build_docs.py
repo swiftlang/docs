@@ -97,15 +97,6 @@ def parse_args():
         help="Prepend a path segment to the hosting base path (e.g. 'docs' → 'docs/main'). "
              "Does not affect the output directory name or landing page title.",
     )
-    parser.add_argument(
-        "--canonical-base-url",
-        default=None,
-        metavar="URL",
-        help="Base URL for a <link rel=\"canonical\"> tag injected into every page "
-             "of the combined archive (e.g. 'https://docs.swift.org/latest'). "
-             "Every build should point at the same canonical copy, regardless of "
-             "which version this build itself is. Omit to skip injection.",
-    )
     return parser.parse_args()
 
 
@@ -162,6 +153,15 @@ def validate_sources(config):
     else:
         if not config["version"].get("slug"):
             errors.append("Top-level 'version' object is missing 'slug'")
+
+    if "canonical_base_url" in config:
+        canonical_base_url = config["canonical_base_url"]
+        if not isinstance(canonical_base_url, str) or not canonical_base_url:
+            errors.append("Top-level 'canonical_base_url' field must be a non-empty string")
+        elif not canonical_base_url.startswith(("http://", "https://")):
+            errors.append(
+                "Top-level 'canonical_base_url' must be an absolute http(s) URL"
+            )
 
     if "sources" not in config:
         errors.append("Top-level 'sources' field is missing")
@@ -1056,6 +1056,7 @@ def main():
     version = config["version"]
     version_slug = version["slug"]
     hosting_base_path = f"{args.extra_hosting_prefix}/{version_slug}" if args.extra_hosting_prefix else version_slug
+    canonical_base_url = config.get("canonical_base_url")
     sources = config["sources"]
 
     # Ensure consistent, pretty-printed DocC JSON output
@@ -1138,7 +1139,7 @@ def main():
             all_archives, output_dir, version_slug, tools.docc, failed,
             common_dir=common_dir, navigation=navigation,
             hosting_base_path=hosting_base_path,
-            canonical_base_url=args.canonical_base_url,
+            canonical_base_url=canonical_base_url,
         )
         succeeded.extend(s_steps)
         failed.extend(f_steps)

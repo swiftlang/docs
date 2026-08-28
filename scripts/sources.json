@@ -2,6 +2,7 @@
   "version": {
     "slug": "main"
   },
+  "canonical_base_url": "https://docs.swift.org/latest",
   "sources": [
     {
       "id": "swift-book",
