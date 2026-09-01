@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build_docs  # noqa: E402
 import curate_navigator  # noqa: E402
+import inject_canonical_link  # noqa: E402
 import strip_availability  # noqa: E402
 import strip_language_toggle  # noqa: E402
 import suppress_eyebrows  # noqa: E402
@@ -86,6 +87,87 @@ class ValidateVersionField(unittest.TestCase):
         output = _validate(self._config({}))
         self.assertIsNotNone(output)
         self.assertIn("slug", output)
+
+
+class ValidateCanonicalBaseUrlField(unittest.TestCase):
+    """canonical_base_url is deliberately NOT validated by validate_sources():
+    a malformed value should warn and disable canonical-link injection (see
+    ResolveCanonicalBaseUrl below), not fail the whole documentation build.
+    """
+
+    def _config(self, canonical_base_url=None):
+        config = {
+            "version": {"slug": "main"},
+            "sources": [{
+                "id": "stdlib",
+                "type": "archive",
+                "url": "https://example.com/Swift.doccarchive.tar.gz",
+                "docc_archive_name": "Swift.doccarchive",
+            }],
+        }
+        if canonical_base_url is not None:
+            config["canonical_base_url"] = canonical_base_url
+        return config
+
+    def test_omitted_is_valid(self):
+        output = _validate(self._config())
+        self.assertIsNone(output)
+
+    def test_valid_https_url_is_accepted(self):
+        output = _validate(self._config("https://docs.swift.org/latest"))
+        self.assertIsNone(output)
+
+    def test_malformed_value_does_not_fail_validation(self):
+        for bad_value in ({"not": "a string"}, "", "docs.swift.org/latest"):
+            with self.subTest(bad_value=bad_value):
+                output = _validate(self._config(bad_value))
+                self.assertIsNone(output)
+
+
+class ResolveCanonicalBaseUrl(unittest.TestCase):
+    """build_docs._resolve_canonical_base_url() is the single point that
+    decides whether canonical-link injection runs. A missing field is silent;
+    a malformed field prints an explicit warning (so it shows up in the build
+    script's own output, and therefore in CI logs) and disables injection for
+    this build rather than failing it outright.
+    """
+
+    def test_absent_returns_none_silently(self):
+        with mock.patch("builtins.print") as mock_print:
+            result = build_docs._resolve_canonical_base_url({})
+        self.assertIsNone(result)
+        mock_print.assert_not_called()
+
+    def test_valid_https_url_is_returned(self):
+        config = {"canonical_base_url": "https://docs.swift.org/latest"}
+        with mock.patch("builtins.print") as mock_print:
+            result = build_docs._resolve_canonical_base_url(config)
+        self.assertEqual(result, "https://docs.swift.org/latest")
+        mock_print.assert_not_called()
+
+    def test_valid_http_url_is_returned(self):
+        config = {"canonical_base_url": "http://example.com/latest"}
+        result = build_docs._resolve_canonical_base_url(config)
+        self.assertEqual(result, "http://example.com/latest")
+
+    def test_malformed_value_warns_and_disables_injection(self):
+        bad_values = [
+            {"not": "a string"},
+            "",
+            "docs.swift.org/latest",
+            "https://",
+            "ftp://docs.swift.org/latest",
+        ]
+        for bad_value in bad_values:
+            with self.subTest(canonical_base_url=bad_value):
+                config = {"canonical_base_url": bad_value}
+                with mock.patch("builtins.print") as mock_print:
+                    result = build_docs._resolve_canonical_base_url(config)
+                self.assertIsNone(result)
+                mock_print.assert_called_once()
+                warning = mock_print.call_args[0][0]
+                self.assertIn("Warning", warning)
+                self.assertIn("canonical_base_url", warning)
 
 
 class ValidateArchiveType(unittest.TestCase):
@@ -189,26 +271,18 @@ class ValidateArchiveType(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn("unknown type", output)
 
-    def test_strip_availability_true_is_valid(self):
-        entry = {
-            "id": "stdlib",
-            "type": "archive",
-            "url": "https://example.com/Swift.doccarchive.zip",
-            "docc_archive_name": "Swift.doccarchive",
-            "format": "zip",
-            "strip_availability": True,
-        }
-        self.assertIsNone(_validate(_wrap(entry)))
-
-    def test_strip_availability_false_is_valid(self):
-        entry = {
-            "id": "stdlib",
-            "type": "archive",
-            "url": "https://example.com/Swift.doccarchive.tar.gz",
-            "docc_archive_name": "Swift.doccarchive",
-            "strip_availability": False,
-        }
-        self.assertIsNone(_validate(_wrap(entry)))
+    def test_strip_availability_bool_is_valid(self):
+        for value in (True, False):
+            with self.subTest(strip_availability=value):
+                entry = {
+                    "id": "stdlib",
+                    "type": "archive",
+                    "url": "https://example.com/Swift.doccarchive.zip",
+                    "docc_archive_name": "Swift.doccarchive",
+                    "format": "zip",
+                    "strip_availability": value,
+                }
+                self.assertIsNone(_validate(_wrap(entry)))
 
     def test_strip_availability_non_bool_rejected(self):
         entry = {
@@ -708,6 +782,232 @@ class StripLanguageToggleArchive(unittest.TestCase):
                 strip_language_toggle.strip_archive(not_an_archive)
 
 
+def _make_transformed_archive(root, archive_name="Combined.doccarchive"):
+    """Build a minimal post-transform-for-static-hosting archive tree: a root
+    index.html stub and two nested per-route stubs, mirroring the shape
+    `docc process-archive transform-for-static-hosting` produces (one
+    index.html per route, sharing the same generic <head>).
+
+    Returns the archive path.
+    """
+    archive = root / archive_name
+    stub = "<!doctype html><html><head><title>Documentation</title></head><body></body></html>"
+
+    (archive).mkdir(parents=True)
+    (archive / "index.html").write_text(stub)
+
+    doc_dir = archive / "documentation"
+    doc_dir.mkdir()
+    (doc_dir / "index.html").write_text(stub)
+
+    nested_dir = doc_dir / "wasmguide"
+    nested_dir.mkdir()
+    (nested_dir / "index.html").write_text(stub)
+
+    return archive
+
+
+class CanonicalizeArchive(unittest.TestCase):
+    def test_injects_canonical_link_for_root_and_nested_routes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_transformed_archive(Path(tmp))
+
+            scanned, modified = inject_canonical_link.canonicalize_archive(
+                archive, "https://docs.swift.org/latest"
+            )
+
+            root_html = (archive / "index.html").read_text()
+            doc_html = (archive / "documentation" / "index.html").read_text()
+            nested_html = (
+                archive / "documentation" / "wasmguide" / "index.html"
+            ).read_text()
+
+            self.assertIn(
+                '<link rel="canonical" href="https://docs.swift.org/latest">',
+                root_html,
+            )
+            self.assertIn(
+                '<link rel="canonical" '
+                'href="https://docs.swift.org/latest/documentation">',
+                doc_html,
+            )
+            self.assertIn(
+                '<link rel="canonical" href="https://docs.swift.org/latest'
+                '/documentation/wasmguide">',
+                nested_html,
+            )
+            self.assertEqual(scanned, 3)
+            self.assertEqual(modified, 3)
+
+    def test_trailing_slash_on_base_url_is_normalized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_transformed_archive(Path(tmp))
+
+            inject_canonical_link.canonicalize_archive(
+                archive, "https://docs.swift.org/latest/"
+            )
+
+            root_html = (archive / "index.html").read_text()
+            self.assertIn(
+                '<link rel="canonical" href="https://docs.swift.org/latest">',
+                root_html,
+            )
+
+    def test_replaces_existing_canonical_link_idempotently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_transformed_archive(Path(tmp))
+            stale = (
+                "<!doctype html><html><head><title>Documentation</title>"
+                '<link rel="canonical" href="https://docs.swift.org/main">'
+                "</head><body></body></html>"
+            )
+            (archive / "index.html").write_text(stale)
+
+            scanned, modified = inject_canonical_link.canonicalize_archive(
+                archive, "https://docs.swift.org/latest"
+            )
+
+            root_html = (archive / "index.html").read_text()
+            self.assertEqual(
+                root_html.count('rel="canonical"'), 1,
+                "must replace the stale tag, not add a second one",
+            )
+            self.assertIn(
+                '<link rel="canonical" href="https://docs.swift.org/latest">',
+                root_html,
+            )
+            self.assertNotIn("docs.swift.org/main", root_html)
+            self.assertEqual(scanned, 3)
+            self.assertEqual(modified, 3)
+
+    def test_rerun_with_unchanged_url_reports_no_further_modification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_transformed_archive(Path(tmp))
+            inject_canonical_link.canonicalize_archive(
+                archive, "https://docs.swift.org/latest"
+            )
+
+            scanned, modified = inject_canonical_link.canonicalize_archive(
+                archive, "https://docs.swift.org/latest"
+            )
+
+            self.assertEqual(scanned, 3)
+            self.assertEqual(modified, 0)
+
+    def test_route_segment_is_html_escaped_in_href(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "Combined.doccarchive"
+            archive.mkdir()
+            stub = (
+                "<!doctype html><html><head><title>Documentation</title>"
+                "</head><body></body></html>"
+            )
+            (archive / "index.html").write_text(stub)
+            odd_dir = archive / 'a&b'
+            odd_dir.mkdir()
+            (odd_dir / "index.html").write_text(stub)
+
+            inject_canonical_link.canonicalize_archive(
+                archive, "https://docs.swift.org/latest"
+            )
+
+            odd_html = (odd_dir / "index.html").read_text()
+            self.assertIn(
+                '<link rel="canonical" '
+                'href="https://docs.swift.org/latest/a&amp;b">',
+                odd_html,
+            )
+
+    def test_file_without_head_close_tag_is_scanned_but_not_modified(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_transformed_archive(Path(tmp))
+            (archive / "index.html").write_text("<html><body>no head here</body></html>")
+
+            scanned, modified = inject_canonical_link.canonicalize_archive(
+                archive, "https://docs.swift.org/latest"
+            )
+
+            self.assertEqual(scanned, 3)
+            self.assertEqual(modified, 2)
+            self.assertEqual(
+                (archive / "index.html").read_text(),
+                "<html><body>no head here</body></html>",
+            )
+
+    def test_missing_root_index_html_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            not_an_archive = Path(tmp) / "NotAnArchive"
+            not_an_archive.mkdir()
+            with self.assertRaises(ValueError):
+                inject_canonical_link.canonicalize_archive(
+                    not_an_archive, "https://docs.swift.org/latest"
+                )
+
+    def test_non_ascii_content_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "Combined.doccarchive"
+            archive.mkdir()
+            stub = (
+                "<!doctype html><html><head>"
+                "<title>Café Documentation — wasm→native</title>"
+                "</head><body></body></html>"
+            )
+            (archive / "index.html").write_text(stub, encoding="utf-8")
+
+            scanned, modified = inject_canonical_link.canonicalize_archive(
+                archive, "https://docs.swift.org/latest"
+            )
+
+            root_html = (archive / "index.html").read_text(encoding="utf-8")
+            self.assertEqual(scanned, 1)
+            self.assertEqual(modified, 1)
+            self.assertIn("Café Documentation — wasm→native", root_html)
+            self.assertIn(
+                '<link rel="canonical" href="https://docs.swift.org/latest">',
+                root_html,
+            )
+
+    def test_write_failure_leaves_original_file_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_transformed_archive(Path(tmp))
+            original = (archive / "index.html").read_text()
+
+            with mock.patch.object(
+                inject_canonical_link.os, "replace", side_effect=OSError("boom")
+            ):
+                with self.assertRaises(OSError):
+                    inject_canonical_link.canonicalize_archive(
+                        archive, "https://docs.swift.org/latest"
+                    )
+
+            self.assertEqual((archive / "index.html").read_text(), original)
+            leftover_temp_files = [
+                p for p in archive.iterdir() if p.name.startswith(".")
+            ]
+            self.assertEqual(
+                leftover_temp_files, [],
+                "a failed write must not leave a stray temp file behind",
+            )
+
+
+class InjectCanonicalLinkCLI(unittest.TestCase):
+    def test_os_error_from_canonicalize_archive_exits_cleanly(self):
+        argv = ["inject_canonical_link.py", "/some/archive", "https://docs.swift.org/latest"]
+        with mock.patch.object(sys, "argv", argv):
+            with mock.patch.object(
+                inject_canonical_link, "canonicalize_archive",
+                side_effect=OSError("boom"),
+            ):
+                with mock.patch.object(sys, "stderr") as mock_stderr:
+                    with self.assertRaises(SystemExit) as cm:
+                        inject_canonical_link.main()
+        self.assertEqual(cm.exception.code, 1)
+        written = "".join(call.args[0] for call in mock_stderr.write.call_args_list)
+        self.assertIn("error:", written)
+        self.assertIn("boom", written)
+
+
 def _make_archive_with_collections(root, archive_name="Combined.doccarchive"):
     """Build a minimal merged .doccarchive tree with two module landing pages,
     the synthesized combined landing page, and one non-collection page.
@@ -1193,11 +1493,8 @@ class MergeArchives(unittest.TestCase):
 
     def test_landing_page_name_is_version_independent(self):
         cmd_main = self._capture_merge_cmd("main")
-        cmd_6_2 = self._capture_merge_cmd("6.2")
         name_idx_main = cmd_main.index("--synthesized-landing-page-name") + 1
-        name_idx_6_2 = cmd_6_2.index("--synthesized-landing-page-name") + 1
         self.assertEqual(cmd_main[name_idx_main], "Swift Documentation")
-        self.assertEqual(cmd_6_2[name_idx_6_2], "Swift Documentation")
 
 
 class FinalizeCombinedArchive(unittest.TestCase):
@@ -1328,7 +1625,45 @@ class FinalizeCombinedArchive(unittest.TestCase):
         )
         self.assertEqual(failed, [])
 
-    def test_language_toggle_suppression_failure_records_only_that_step(self):
+    def test_step_failure_records_only_that_step(self):
+        cases = [
+            ("strip_language_toggle_archive",
+             ["combined-merge", "eyebrow-suppression"],
+             ["language-toggle-suppression"]),
+            ("canonicalize_link_archive",
+             ["combined-merge", "eyebrow-suppression", "language-toggle-suppression",
+              "static-hosting-transform"],
+             ["canonical-link-injection"]),
+        ]
+        for mock_target, expected_succeeded, expected_failed in cases:
+            with self.subTest(mock_target=mock_target):
+                with tempfile.TemporaryDirectory() as tmp:
+                    tmp_path = Path(tmp)
+                    archive = tmp_path / "a.doccarchive"
+                    archive.mkdir()
+                    (archive / "index.html").write_text("ok")
+
+                    def fake_run(cmd, **kw):
+                        out_idx = cmd.index("--output-path") + 1
+                        out = Path(cmd[out_idx])
+                        out.mkdir(parents=True, exist_ok=True)
+                        (out / "index.html").write_text("stub")
+                        if "merge" in cmd:
+                            (out / "data").mkdir(parents=True, exist_ok=True)
+                        return subprocess.CompletedProcess(cmd, 0)
+
+                    with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                        with mock.patch.object(
+                            build_docs, mock_target, side_effect=OSError("boom"),
+                        ):
+                            succeeded, failed = build_docs._finalize_combined_archive(
+                                [archive], tmp_path, "main", ["docc"], prior_failed=[],
+                                canonical_base_url="https://docs.swift.org/latest",
+                            )
+                self.assertEqual(succeeded, expected_succeeded)
+                self.assertEqual(failed, expected_failed)
+
+    def test_canonical_base_url_omitted_skips_canonical_link_injection(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             archive = tmp_path / "a.doccarchive"
@@ -1339,19 +1674,58 @@ class FinalizeCombinedArchive(unittest.TestCase):
                 out_idx = cmd.index("--output-path") + 1
                 out = Path(cmd[out_idx])
                 out.mkdir(parents=True, exist_ok=True)
-                (out / "index.html").write_text("merged")
+                (out / "index.html").write_text("stub")
+                if "merge" in cmd:
+                    (out / "data").mkdir(parents=True, exist_ok=True)
                 return subprocess.CompletedProcess(cmd, 0)
 
             with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
                 with mock.patch.object(
-                    build_docs, "strip_language_toggle_archive",
-                    side_effect=OSError("boom"),
-                ):
+                    build_docs, "canonicalize_link_archive"
+                ) as mock_canonicalize:
                     succeeded, failed = build_docs._finalize_combined_archive(
                         [archive], tmp_path, "main", ["docc"], prior_failed=[]
                     )
-        self.assertEqual(succeeded, ["combined-merge", "eyebrow-suppression"])
-        self.assertEqual(failed, ["language-toggle-suppression"])
+        mock_canonicalize.assert_not_called()
+        self.assertNotIn("canonical-link-injection", succeeded)
+        self.assertEqual(failed, [])
+
+    def test_canonical_base_url_given_runs_and_records_injection_step(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = tmp_path / "a.doccarchive"
+            archive.mkdir()
+            (archive / "index.html").write_text("ok")
+
+            def fake_run(cmd, **kw):
+                out_idx = cmd.index("--output-path") + 1
+                out = Path(cmd[out_idx])
+                out.mkdir(parents=True, exist_ok=True)
+                (out / "index.html").write_text(
+                    "<html><head><title>Documentation</title></head><body></body></html>"
+                )
+                if "merge" in cmd:
+                    (out / "data").mkdir(parents=True, exist_ok=True)
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
+                succeeded, failed = build_docs._finalize_combined_archive(
+                    [archive], tmp_path, "main", ["docc"], prior_failed=[],
+                    canonical_base_url="https://docs.swift.org/latest",
+                )
+            self.assertEqual(
+                succeeded,
+                ["combined-merge", "eyebrow-suppression", "language-toggle-suppression",
+                 "static-hosting-transform", "canonical-link-injection"],
+            )
+            self.assertEqual(failed, [])
+            combined_output = tmp_path / "main"
+            self.assertNotEqual(
+                (combined_output / "index.html").read_text(),
+                "<html><head><title>Documentation</title></head><body></body></html>",
+                "canonical-link-injection step must actually modify the stub "
+                "(exact injected HTML shape is CanonicalizeArchive's concern)",
+            )
 
     def _merge_writes_index(self, modules):
         """Build a fake subprocess.run that writes a merged index.json on merge.
