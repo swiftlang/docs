@@ -36,56 +36,56 @@ These design guidelines explain how to make sure that your code feels like a par
 
 ### Fundamentals
 
-- <doc:API-0001>
+- <doc:documentation-comments>
 
 ### Naming — Promote Clear Usage
 
-- <doc:API-0002>
-- <doc:API-0003>
-- <doc:API-0004>
-- <doc:API-0005>
+- <doc:avoid-ambiguity>
+- <doc:omit-needless-words>
+- <doc:name-according-to-roles>
+- <doc:weak-type-information>
 
 ### Naming — Strive for Fluent Usage
 
-- <doc:API-0006>
-- <doc:API-0007>
-- <doc:API-0008>
-- <doc:API-0009>
-- <doc:API-0010>
-- <doc:API-0011>
-- <doc:API-0012>
-- <doc:API-0013>
+- <doc:grammatical-phrases>
+- <doc:factory-methods>
+- <doc:initializer-first-arguments>
+- <doc:side-effect-naming>
+- <doc:boolean-assertions>
+- <doc:protocol-nouns>
+- <doc:protocol-capability-suffixes>
+- <doc:noun-names>
 
 ### Naming — Use Terminology Well
 
-- <doc:API-0014>
-- <doc:API-0015>
-- <doc:API-0016>
-- <doc:API-0017>
+- <doc:avoid-obscure-terms>
+- <doc:established-meaning>
+- <doc:avoid-abbreviations>
+- <doc:embrace-precedent>
 
 ### Conventions — General
 
-- <doc:API-0018>
-- <doc:API-0019>
-- <doc:API-0020>
-- <doc:API-0021>
+- <doc:computed-property-complexity>
+- <doc:methods-over-free-functions>
+- <doc:case-conventions>
+- <doc:shared-base-names>
 
 ### Conventions — Parameters
 
-- <doc:API-0022>
-- <doc:API-0023>
-- <doc:API-0024>
-- <doc:API-0025>
+- <doc:parameter-names-for-documentation>
+- <doc:defaulted-parameters>
+- <doc:default-parameter-order>
+- <doc:prefer-fileid>
 
 ### Conventions — Argument Labels
 
-- <doc:API-0026>
-- <doc:API-0027>
-- <doc:API-0028>
-- <doc:API-0029>
-- <doc:API-0030>
+- <doc:indistinguishable-arguments>
+- <doc:value-preserving-conversions>
+- <doc:prepositional-phrase-labels>
+- <doc:grammatical-phrase-arguments>
+- <doc:label-other-arguments>
 
 ### Special Instructions
 
-- <doc:API-0031>
-- <doc:API-0032>
+- <doc:tuple-and-closure-labels>
+- <doc:unconstrained-polymorphism>
