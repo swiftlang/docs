@@ -1,6 +1,6 @@
 # Label tuple members and name closure parameters
 
-**Label tuple members and name closure parameters** where they appear in your API.
+Label tuple members and name closure parameters where they appear in your API.
 
 ## Overview
 

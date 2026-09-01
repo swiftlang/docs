@@ -4,9 +4,9 @@ Insights gained by writing documentation can have a profound impact on your desi
 
 ## Overview
 
-* **Use Swift's [dialect of Markdown](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/).**
+* Use Swift's [dialect of Markdown](https://docs.swift.org/latest/documentation/docc/formatting-your-documentation-content).
 
-* **Begin with a summary** that describes the entity being declared.
+* Begin with a summary that describes the entity being declared.
   Often, an API can be completely understood from its declaration and
   its summary.
 
@@ -16,15 +16,15 @@ Insights gained by writing documentation can have a profound impact on your desi
   func reversed() -> ReverseCollection<Self>
   ```
 
-  * **Focus on the summary**; it's the most important part. Many
+  * Focus on the summary; it's the most important part. Many
     excellent documentation comments consist of nothing more than a
     great summary.
 
-  * **Use a single sentence fragment** if possible, ending with a
+  * Use a single sentence fragment if possible, ending with a
     period.  Do not use a complete sentence.
 
-  * **Describe what a function or method *does* and what it
-    *returns***, omitting null effects and `Void` returns:
+  * Describe what a function or method *does* and what it
+    *returns*, omitting null effects and `Void` returns:
 
     ```swift
     /// **Inserts** `newHead` at the beginning of `self`.
@@ -42,21 +42,21 @@ Insights gained by writing documentation can have a profound impact on your desi
     Note: in rare cases like `popFirst` above, the summary is formed
     of multiple sentence fragments separated by semicolons.
 
-  * **Describe what a subscript *accesses***:
+  * Describe what a subscript *accesses*:
 
     ```swift
     /// **Accesses** the `index`th element.
     subscript(index: Int) -> Element { get set }
     ```
 
-  * **Describe what an initializer *creates***:
+  * Describe what an initializer *creates*:
 
     ```swift
     /// **Creates** an instance containing `n` repetitions of `x`.
     init(count n: Int, repeatedElement x: Element)
     ```
 
-  * For all other declarations, **describe what the declared entity *is***.
+  * For all other declarations, describe what the declared entity *is*.
 
     ```swift
     /// **A collection that** supports equally efficient insertion/removal
@@ -69,7 +69,7 @@ Insights gained by writing documentation can have a profound impact on your desi
       ...
     ```
 
-* **Optionally, continue** with one or more paragraphs and bullet
+* Optionally, continue with one or more paragraphs and bullet
   items.  Paragraphs are separated by blank lines and use complete
   sentences.
 
@@ -97,19 +97,19 @@ Insights gained by writing documentation can have a profound impact on your desi
     _ items: Any..., separator: String = " ", terminator: String = "\n")
   ```
 
-  * **Use recognized
-    [symbol documentation markup](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/SymbolDocumentation.html#//apple_ref/doc/uid/TP40016497-CH51-SW1)
-    elements** to add information beyond the summary, whenever
+  * Use recognized
+    [symbol documentation markup](https://docs.swift.org/latest/documentation/docc/writing-symbol-documentation-in-your-source-files)
+    elements to add information beyond the summary, whenever
     appropriate.
 
-  * **Know and use recognized bullet items with
-    [symbol command syntax](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/SymbolDocumentation.html#//apple_ref/doc/uid/TP40016497-CH51-SW13).** Popular development
+  * Know and use recognized bullet items with
+    [symbol command syntax](https://docs.swift.org/latest/documentation/docc/writing-symbol-documentation-in-your-source-files#Describe-the-Parameters-of-a-Method). Popular development
     tools such as Xcode give special treatment to bullet items that
     start with the following keywords:
 
-    | [Attention](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Attention.html) | [Author](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Author.html) | [Authors](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Authors.html) | [Bug](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Bug.html) |
-    | [Complexity](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Complexity.html) | [Copyright](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Copyright.html) | [Date](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Date.html) | [Experiment](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Experiment.html) |
-    | [Important](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Important.html) | [Invariant](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Invariant.html) | [Note](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Note.html) | [Parameter](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Parameter.html) |
-    | [Parameters](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Parameters.html) | [Postcondition](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Postcondition.html) | [Precondition](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Precondition.html) | [Remark](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Remark.html) |
-    | [Requires](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Requires.html) | [Returns](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Returns.html) | [SeeAlso](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/SeeAlso.html) | [Since](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Since.html) |
-    | [Throws](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Throws.html) | [ToDo](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Todo.html) | [Version](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Version.html) | [Warning](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_markup_formatting_ref/Warning.html) |
+    | [Attention](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Author](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Authors](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Bug](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) |
+    | [Complexity](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Copyright](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Date](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Experiment](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) |
+    | [Important](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Invariant](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Note](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Parameter](https://docs.swift.org/latest/documentation/docc/writing-symbol-documentation-in-your-source-files#Describe-the-Parameters-of-a-Method) |
+    | [Parameters](https://docs.swift.org/latest/documentation/docc/writing-symbol-documentation-in-your-source-files#Describe-the-Parameters-of-a-Method) | [Postcondition](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Precondition](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Remark](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) |
+    | [Requires](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Returns](https://docs.swift.org/latest/documentation/docc/writing-symbol-documentation-in-your-source-files#Describe-the-Return-Value-of-a-Method) | [SeeAlso](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Since](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) |
+    | [Throws](https://docs.swift.org/latest/documentation/docc/writing-symbol-documentation-in-your-source-files#Describe-the-Thrown-Errors-of-a-Method) | [ToDo](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Version](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) | [Warning](https://docs.swift.org/latest/documentation/docc/other-formatting-options#Add-Notes-and-Other-Asides) |

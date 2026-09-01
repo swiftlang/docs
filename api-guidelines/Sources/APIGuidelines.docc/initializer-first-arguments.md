@@ -1,8 +1,10 @@
 # Initializer and factory method first arguments
 
-The first argument to initializer and factory method calls should not form a phrase starting with the base name, e.g. `x.makeWidget(cogCount: 47)`
+The first argument to initializer and factory method calls should not form a phrase starting with the base name.
 
 ## Overview
+
+For example: `x.makeWidget(cogCount: 47)`.
 
 For more on factory methods, see [Factory method pattern](https://en.wikipedia.org/wiki/Factory_method_pattern).
 

@@ -1,8 +1,10 @@
 # Follow case conventions
 
-**Follow case conventions.** Names of types and protocols are `UpperCamelCase`. Everything else is `lowerCamelCase`.
+Follow case conventions.
 
 ## Overview
+
+Names of types and protocols are `UpperCamelCase`. Everything else is `lowerCamelCase`.
 
 [Acronyms and initialisms](https://en.wikipedia.org/wiki/Acronym)
 that commonly appear as all upper case in American English should be

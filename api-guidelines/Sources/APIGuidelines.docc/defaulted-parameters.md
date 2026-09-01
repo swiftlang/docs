@@ -1,12 +1,12 @@
 # Take advantage of defaulted parameters
 
-**Take advantage of defaulted parameters** when it simplifies common uses. Any parameter with a single commonly-used value is a candidate for a default.
+Take advantage of defaulted parameters when it simplifies common uses.
 
 ## Overview
 
-Default arguments improve readability by hiding irrelevant information.
+Any parameter with a single commonly-used value is a candidate for a default. Default arguments improve readability by hiding irrelevant information.
 
-⛔ For example:
+⛔ Passing every option explicitly buries the one argument that matters among values callers rarely change:
 
 ```swift
 let order = lastName.compare(
@@ -23,7 +23,7 @@ Default arguments are generally preferable to the use of method
 families, because they impose a lower cognitive burden on anyone
 trying to understand the API.
 
-✅
+✅ A single method with defaults replaces the whole family below, at a much lower cognitive cost:
 
 ```swift
 extension String {

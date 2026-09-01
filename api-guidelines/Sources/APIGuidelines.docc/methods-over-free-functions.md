@@ -1,8 +1,10 @@
 # Prefer methods and properties to free functions
 
-**Prefer methods and properties to free functions.** Free functions are used only in special cases.
+Prefer methods and properties to free functions.
 
 ## Overview
+
+Free functions are used only in special cases:
 
 1. When there's no obvious `self`:
 

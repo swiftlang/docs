@@ -1,8 +1,10 @@
 # Take extra care with unconstrained polymorphism
 
-**Take extra care with unconstrained polymorphism** (e.g. `Any`, `AnyObject`, and unconstrained generic parameters) to avoid ambiguities in overload sets.
+Take extra care with unconstrained polymorphism to avoid ambiguities in overload sets.
 
 ## Overview
+
+Unconstrained polymorphism includes types such as `Any`, `AnyObject`, and unconstrained generic parameters.
 
 ⛔ For example, consider this overload set:
 
@@ -23,7 +25,7 @@ appear at first to be sharply distinct.  However, when `Element`
 is `Any`, a single element can have the same type as a sequence of
 elements.
 
-⛔
+⛔ Because `Element` can be `Any`, this call is ambiguous between the two overloads:
 
 ```swift
 var values: [Any] = [1, "a"]

@@ -1,6 +1,6 @@
 # Name according to side-effects
 
-**Name functions and methods according to their side-effects.**
+Name functions and methods according to their side-effects.
 
 ## Overview
 
@@ -10,12 +10,12 @@
 * Those with side-effects should read as imperative verb phrases,
   e.g., `print(x)`, `x.sort()`, `x.append(y)`.
 
-* **Name Mutating/nonmutating method pairs** consistently.
+* Name mutating/nonmutating method pairs consistently.
   A mutating method will often have a nonmutating variant with
   similar semantics, but that returns a new value rather than
   updating an instance in-place.
 
-  * When the operation is **naturally described by a verb**, use the
+  * When the operation is naturally described by a verb, use the
     verb's imperative for the mutating method and apply the "ed" or
     "ing" suffix to name its nonmutating counterpart.
 
@@ -55,7 +55,7 @@
       let oneLine = t.strippingNewlines()
       ```
 
-  * When the operation is **naturally described by a noun**, use the
+  * When the operation is naturally described by a noun, use the
     noun for the nonmutating method and apply the "form" prefix to
     name its mutating counterpart.
 

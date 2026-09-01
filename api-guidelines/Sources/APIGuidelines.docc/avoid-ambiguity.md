@@ -1,6 +1,6 @@
 # Include words to avoid ambiguity
 
-**Include all the words needed to avoid ambiguity** for a person reading code where the name is used.
+Include all the words needed to avoid ambiguity for a person reading code where the name is used.
 
 ## Overview
 

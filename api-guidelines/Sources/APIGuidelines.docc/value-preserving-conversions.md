@@ -1,8 +1,10 @@
 # Omit first label for value-preserving type conversions
 
-**In initializers that perform value preserving type conversions, omit the first argument label**, e.g. `Int64(someUInt32)`
+In initializers that perform value preserving type conversions, omit the first argument label.
 
 ## Overview
+
+For example: `Int64(someUInt32)`.
 
 The first argument should always be the source of the conversion.
 

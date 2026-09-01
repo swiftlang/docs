@@ -1,6 +1,6 @@
 # Avoid obscure terms
 
-**Avoid obscure terms** if a more common word conveys meaning just as well.
+Avoid obscure terms if a more common word conveys meaning just as well.
 
 ## Overview
 

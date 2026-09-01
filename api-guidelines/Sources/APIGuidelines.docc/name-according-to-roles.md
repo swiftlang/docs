@@ -1,6 +1,6 @@
 # Name according to roles
 
-**Name variables, parameters, and associated types according to their roles,** rather than their type constraints.
+Name variables, parameters, and associated types according to their roles, rather than their type constraints.
 
 ## Overview
 

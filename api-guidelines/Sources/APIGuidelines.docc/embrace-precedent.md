@@ -1,8 +1,10 @@
 # Embrace precedent
 
-**Embrace precedent.** Don't optimize terms for the total beginner at the expense of conformance to existing culture.
+Embrace precedent.
 
 ## Overview
+
+Don't optimize terms for the total beginner at the expense of conformance to existing culture.
 
 It is better to name a contiguous data structure `Array` than to
 use a simplified term such as `List`, even though a beginner

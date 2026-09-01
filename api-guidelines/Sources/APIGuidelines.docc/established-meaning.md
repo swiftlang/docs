@@ -1,6 +1,6 @@
 # Stick to the established meaning
 
-**Stick to the established meaning** if you do use a term of art.
+Stick to the established meaning if you do use a term of art.
 
 ## Overview
 
@@ -9,9 +9,9 @@ word is that it *precisely* expresses something that would
 otherwise be ambiguous or unclear.  Therefore, an API should use
 the term strictly in accordance with its accepted meaning.
 
-* **Don't surprise an expert**: anyone already familiar with the term
+* Don't surprise an expert: anyone already familiar with the term
   will be surprised and probably angered if we appear to have
   invented a new meaning for it.
 
-* **Don't confuse a beginner**: anyone trying to learn the term is
+* Don't confuse a beginner: anyone trying to learn the term is
   likely to do a web search and find its traditional meaning.

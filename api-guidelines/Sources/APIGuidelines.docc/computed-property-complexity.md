@@ -1,6 +1,6 @@
 # Document computed property complexity
 
-**Document the complexity of any computed property that is not O(1).**
+Document the complexity of any computed property that is not O(1).
 
 ## Overview
 

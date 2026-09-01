@@ -1,13 +1,15 @@
 # Omit label when first argument forms a grammatical phrase
 
-**Otherwise, if the first argument forms part of a grammatical phrase, omit its label**, appending any preceding words to the base name, e.g. `x.addSubview(y)`
+Otherwise, if the first argument forms part of a grammatical phrase, omit its label, appending any preceding words to the base name.
 
 ## Overview
+
+For example: `x.addSubview(y)`.
 
 This guideline implies that if the first argument *doesn't* form
 part of a grammatical phrase, it should have a label.
 
-✅
+✅ Each first argument reads as part of a grammatical phrase with the base name, so it can safely omit its label:
 
 ```swift
 view.dismiss(**animated:** false)

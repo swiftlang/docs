@@ -1,8 +1,16 @@
 # Choose parameter names to serve documentation
 
-**Choose parameter names to serve documentation.** Even though parameter names do not appear at a function or method's point of use, they play an important explanatory role.
+Choose parameter names to serve documentation.
 
 ## Overview
+
+Even though parameter names do not appear at a function or method's point of use, they play an important explanatory role.
+
+Parameter names appear in a function or method's declaration:
+
+```swift
+func move(from **start**: Point, to **end**: Point)
+```
 
 Choose these names to make documentation easy to read.
 

@@ -1,6 +1,6 @@
 # Methods can share a base name
 
-**Methods can share a base name** when they share the same basic meaning or when they operate in distinct domains.
+Methods can share a base name when they share the same basic meaning or when they operate in distinct domains.
 
 ## Overview
 

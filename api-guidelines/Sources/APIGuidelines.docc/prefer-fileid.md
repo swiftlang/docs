@@ -1,6 +1,6 @@
 # Prefer #fileID in production
 
-**If your API will run in production, prefer `#fileID`** over alternatives.
+If your API will run in production, prefer `#fileID` over alternatives.
 
 ## Overview
 
