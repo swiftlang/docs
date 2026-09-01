@@ -22,12 +22,14 @@ import subprocess
 import sys
 import tarfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from collections import namedtuple
 from datetime import datetime, timezone
 from pathlib import Path
 
+from inject_canonical_link import canonicalize_archive as canonicalize_link_archive
 from strip_availability import strip_archive
 from strip_language_toggle import strip_archive as strip_language_toggle_archive
 from suppress_eyebrows import suppress_archive as suppress_eyebrow_archive
@@ -269,6 +271,36 @@ def validate_sources(config):
                         )
 
     return errors
+
+
+def _resolve_canonical_base_url(config):
+    """Return config's 'canonical_base_url' if present and well-formed, else None.
+
+    A missing field is silent — canonical-link injection just doesn't run.
+    A malformed field (wrong type, empty, no scheme, no host) prints an
+    explicit warning to stdout — so it shows up in the build script's own
+    output and therefore in CI logs — and disables injection for this build
+    rather than failing the whole documentation build over what's purely an
+    SEO metadata concern.
+    """
+    canonical_base_url = config.get("canonical_base_url")
+    if canonical_base_url is None:
+        return None
+
+    if isinstance(canonical_base_url, str):
+        parsed = urllib.parse.urlparse(canonical_base_url)
+    else:
+        parsed = None
+
+    if parsed and parsed.scheme in ("http", "https") and parsed.netloc:
+        return canonical_base_url
+
+    print(
+        f"Warning: 'canonical_base_url' ({canonical_base_url!r}) is not a valid "
+        "absolute http(s) URL (expected e.g. 'https://docs.swift.org/latest'); "
+        "skipping canonical link injection."
+    )
+    return None
 
 
 def clean_package_build_dirs(root_dir, sources):
@@ -842,7 +874,7 @@ def inject_custom_templates_into_stubs(archive_path, common_dir):
     return patched
 
 
-def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd, prior_failed, common_dir=None, navigation=None, hosting_base_path=None):
+def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd, prior_failed, common_dir=None, navigation=None, hosting_base_path=None, canonical_base_url=None):
     """Merge per-source archives and apply the static-hosting transform.
 
     Returns (succeeded_steps, failed_steps): names that should be added to
@@ -933,6 +965,16 @@ def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd,
         print(f"Patched custom-header/footer into {patched} per-route stub(s).")
 
     prior_steps.append("static-hosting-transform")
+
+    if canonical_base_url:
+        try:
+            scanned, modified = canonicalize_link_archive(combined_output, canonical_base_url)
+            print(f"Canonical link injection: scanned {scanned} file(s), modified {modified}.")
+        except (OSError, ValueError) as e:
+            print(f"Error: canonical link injection failed: {e}")
+            return prior_steps, ["canonical-link-injection"]
+        prior_steps.append("canonical-link-injection")
+
     return prior_steps, []
 
 
@@ -1036,6 +1078,7 @@ def main():
     version = config["version"]
     version_slug = version["slug"]
     hosting_base_path = f"{args.extra_hosting_prefix}/{version_slug}" if args.extra_hosting_prefix else version_slug
+    canonical_base_url = _resolve_canonical_base_url(config)
     sources = config["sources"]
 
     # Ensure consistent, pretty-printed DocC JSON output
@@ -1118,6 +1161,7 @@ def main():
             all_archives, output_dir, version_slug, tools.docc, failed,
             common_dir=common_dir, navigation=navigation,
             hosting_base_path=hosting_base_path,
+            canonical_base_url=canonical_base_url,
         )
         succeeded.extend(s_steps)
         failed.extend(f_steps)
