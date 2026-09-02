@@ -9,3 +9,5 @@ Package.resolved
 **/*.docc/header.html
 **/*.docc/footer.html
 scripts/__pycache__/
+.coverage
+.coverage.*

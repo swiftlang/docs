@@ -55,6 +55,7 @@ DOCC_BUILD_FLAGS = [
     "--experimental-enable-custom-templates",
     "--enable-mentioned-in",
     # "--enable-experimental-external-link-support",
+    "--enable-experimental-code-block-annotations",
     # Emit a markdown copy of every rendered document (plus a manifest) under
     # data/documentation/. These sidecar files survive docc merge and
     # process-archive transform-for-static-hosting, so they reach the published
