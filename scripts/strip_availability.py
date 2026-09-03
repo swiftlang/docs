@@ -15,14 +15,13 @@
 """
 strip-availability.py — Remove platform availability data from a DocC archive.
 
-Walks every JSON file under <archive>/data/ and deletes any "platforms" key it
-finds. In a Swift.doccarchive these only appear in two places:
+Walks every JSON file under <archive>/data/ and deletes or modifies any "platforms"
+key it finds. In a Swift.doccarchive these only appear in two places:
 
-  - metadata.platforms                          (the iOS/macOS/... badge table
-                                                 on each symbol page)
+  - metadata.platforms
+    (the iOS/macOS/... badge table on each symbol page)
   - primaryContentSections[*].declarations[*].platforms
-                                                (per-declaration variant tag,
-                                                 e.g. ["macOS"])
+    (per-declaration variant tag, e.g. ["macOS"])
 
 Both are populated by DocC at convert-time from the bundle's
 CDAppleDefaultAvailability Info.plist key plus any compiler-provided
@@ -68,11 +67,8 @@ def strip_linux(node):
     """Recursively remove only the Linux entry from every TARGET_KEY list.
 
     Unlike strip(), this leaves "platforms" and its other entries (Swift,
-    Xcode, real Apple-platform badges) intact -- it only removes the Linux
-    entry DocC synthesizes from the build host's target triple when a
-    package target's symbol graph is extracted on a Linux toolchain, as
-    swift-testing's is, since the combined build runs inside a Linux
-    container.
+    Xcode) intact -- it only removes the Linux entry DocC synthesizes from
+    the build host's target triple.
     """
     removed = 0
     if isinstance(node, dict):
@@ -138,9 +134,7 @@ def main():
 def strip_archive(archive_path, strip_fn=strip):
     """Strip 'platforms' data from JSON files under <archive>/data/.
 
-    By default deletes every 'platforms' key outright (strip_fn=strip). Pass
-    strip_fn=strip_linux to remove only the Linux entry from each list
-    instead, leaving the rest of the platform data in place.
+    By default deletes every 'platforms' key outright (strip_fn=strip).
 
     Returns (files_scanned, files_modified, keys_removed).
     Raises ValueError if archive_path doesn't look like a .doccarchive
