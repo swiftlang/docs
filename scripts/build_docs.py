@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from inject_canonical_link import canonicalize_archive as canonicalize_link_archive
-from strip_availability import strip_archive
+from strip_availability import strip_archive, strip_linux_availability
 from strip_language_toggle import strip_archive as strip_language_toggle_archive
 from suppress_eyebrows import suppress_archive as suppress_eyebrow_archive
 from curate_navigator import (
@@ -218,6 +218,7 @@ def validate_sources(config):
             disallowed_for_archive = (
                 "targets", "docc_catalog", "path", "repo", "ref",
                 "preflight", "add_docc_plugin", "extra_flags", "env",
+                "strip_linux_availability",
             )
             for field in disallowed_for_archive:
                 if field in entry:
@@ -245,6 +246,14 @@ def validate_sources(config):
                 errors.append(
                     f"{label} has 'strip_availability' but is not type "
                     "'archive' (only allowed on archive sources)"
+                )
+
+            if "strip_linux_availability" in entry and not isinstance(
+                entry["strip_linux_availability"], bool
+            ):
+                errors.append(
+                    f"{label} 'strip_linux_availability' must be a boolean "
+                    f"(got {type(entry['strip_linux_availability']).__name__})"
                 )
 
         if entry.get("add_docc_plugin") and entry_type != "git":
@@ -765,6 +774,15 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
         archives = _build_docc_catalog(
             source, source_dir, common_dir, temp_archive_dir, docc_cmd, env
         )
+
+    if source.get("strip_linux_availability"):
+        for archive in archives:
+            print(f"Stripping Linux availability from {archive}...")
+            scanned, modified, removed = strip_linux_availability(archive)
+            print(
+                f"  scanned {scanned} files; modified {modified}; "
+                f"removed {removed} Linux platform entries"
+            )
 
     configured_ref = source["ref"] if source_type == "git" else None
     actual_ref, commit_sha = _collect_git_metadata(source_dir, configured_ref)

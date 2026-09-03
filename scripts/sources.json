@@ -48,7 +48,8 @@
       "repo": "https://github.com/swiftlang/swift-testing.git",
       "ref": "main",
       "targets": ["Testing"],
-      "add_docc_plugin": true
+      "add_docc_plugin": true,
+      "strip_linux_availability": true
     },
     {
       "id": "docc-documentation",

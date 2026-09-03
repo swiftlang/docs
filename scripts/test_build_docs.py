@@ -324,6 +324,56 @@ class ValidateStripAvailabilityOnNonArchive(unittest.TestCase):
         self.assertIn("strip_availability", output)
 
 
+class ValidateStripLinuxAvailability(unittest.TestCase):
+    def test_bool_is_valid_on_git(self):
+        for value in (True, False):
+            with self.subTest(strip_linux_availability=value):
+                entry = {
+                    "id": "swift-testing",
+                    "type": "git",
+                    "repo": "https://github.com/swiftlang/swift-testing.git",
+                    "ref": "main",
+                    "targets": ["Testing"],
+                    "strip_linux_availability": value,
+                }
+                self.assertIsNone(_validate(_wrap(entry)))
+
+    def test_bool_is_valid_on_local(self):
+        entry = {
+            "id": "api-guidelines",
+            "type": "local",
+            "path": "api-guidelines",
+            "targets": ["APIGuidelines"],
+            "strip_linux_availability": True,
+        }
+        self.assertIsNone(_validate(_wrap(entry)))
+
+    def test_non_bool_rejected(self):
+        entry = {
+            "id": "swift-testing",
+            "type": "git",
+            "repo": "https://github.com/swiftlang/swift-testing.git",
+            "ref": "main",
+            "targets": ["Testing"],
+            "strip_linux_availability": "yes",
+        }
+        output = _validate(_wrap(entry))
+        self.assertIsNotNone(output)
+        self.assertIn("strip_linux_availability", output)
+
+    def test_rejected_on_archive_source(self):
+        entry = {
+            "id": "stdlib",
+            "type": "archive",
+            "url": "https://example.com/Swift.doccarchive.tar.gz",
+            "docc_archive_name": "Swift.doccarchive",
+            "strip_linux_availability": True,
+        }
+        output = _validate(_wrap(entry))
+        self.assertIsNotNone(output)
+        self.assertIn("strip_linux_availability", output)
+
+
 class ValidateExistingTypesStillWork(unittest.TestCase):
     """Regression: make sure local and git validation is unchanged."""
 
@@ -609,6 +659,60 @@ class BuildSourceArchiveBranch(unittest.TestCase):
             self.assertIn("platforms", payload["metadata"])
 
 
+class BuildSourceGitBranchStripLinuxAvailability(unittest.TestCase):
+    def _build(self, tmp_path, archive, strip_linux_availability):
+        source_dir = tmp_path / "checkout"
+        source_dir.mkdir()
+        source = {
+            "id": "swift-testing",
+            "type": "git",
+            "repo": "https://github.com/swiftlang/swift-testing.git",
+            "ref": "main",
+            "targets": ["Testing"],
+        }
+        if strip_linux_availability is not None:
+            source["strip_linux_availability"] = strip_linux_availability
+
+        with mock.patch("build_docs.clone_or_update", return_value=source_dir), \
+                mock.patch("build_docs._build_package_targets", return_value=[archive]):
+            return build_docs.build_source(
+                source,
+                root_dir=tmp_path,
+                workspace=tmp_path / "workspace",
+                common_dir=tmp_path,
+                temp_archive_dir=tmp_path / "_archives",
+                docc_cmd=[],
+                env={},
+            )
+
+    def test_strips_only_linux_entries_from_built_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = _make_archive_with_linux_platform(tmp_path, "Testing.doccarchive")
+
+            archives, _ = self._build(tmp_path, archive, True)
+
+            payload = json.loads(
+                (archives[0] / "data" / "documentation" / "foosymbol.json").read_text()
+            )
+            platform_names = {p["name"] for p in payload["metadata"]["platforms"]}
+            self.assertNotIn("Linux", platform_names)
+            self.assertEqual(platform_names, {"Swift", "Xcode"})
+
+    def test_absent_leaves_linux_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            archive = _make_archive_with_linux_platform(tmp_path, "Testing.doccarchive")
+
+            archives, _ = self._build(tmp_path, archive, None)
+
+            payload = json.loads(
+                (archives[0] / "data" / "documentation" / "foosymbol.json").read_text()
+            )
+            platform_names = {p["name"] for p in payload["metadata"]["platforms"]}
+            self.assertIn("Linux", platform_names)
+
+
 def _make_archive_with_platforms(root, archive_name="Swift.doccarchive"):
     """Build a minimal .doccarchive tree on disk with platforms data sprinkled in.
 
@@ -695,6 +799,119 @@ class StripArchive(unittest.TestCase):
             not_an_archive.mkdir()
             with self.assertRaises(ValueError):
                 strip_availability.strip_archive(not_an_archive)
+
+
+def _make_archive_with_linux_platform(root, archive_name="Testing.doccarchive"):
+    """Build a minimal .doccarchive tree with a synthesized Linux platform entry.
+
+    Mirrors what DocC produces for a package target whose symbol graph was
+    extracted on a Linux toolchain: a "Linux" entry sits alongside the real
+    "Swift"/"Xcode" version markers in metadata.platforms, and a plain-string
+    "Linux" entry in a declaration's platforms list. strip_linux_availability()
+    should remove only those Linux entries and leave the rest untouched.
+    """
+    archive = root / archive_name
+    data_dir = archive / "data" / "documentation"
+    data_dir.mkdir(parents=True)
+
+    symbol = {
+        "metadata": {
+            "title": "FooSymbol",
+            "platforms": [
+                {"name": "Linux", "introducedAt": "6.2"},
+                {"name": "Swift", "introducedAt": "6.2"},
+                {"name": "Xcode", "introducedAt": "26.0"},
+            ],
+        },
+        "primaryContentSections": [
+            {
+                "kind": "declarations",
+                "declarations": [
+                    {
+                        "tokens": [{"text": "func foo()"}],
+                        "platforms": ["Linux"],
+                    }
+                ],
+            }
+        ],
+        "kind": "symbol",
+    }
+    (data_dir / "foosymbol.json").write_text(json.dumps(symbol))
+
+    article = {
+        "metadata": {"title": "Article"},
+        "kind": "article",
+    }
+    (data_dir / "article.json").write_text(json.dumps(article))
+
+    return archive
+
+
+class StripLinuxAvailability(unittest.TestCase):
+    def test_removes_only_linux_entries_and_returns_counts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_archive_with_linux_platform(Path(tmp))
+            scanned, modified, removed = strip_availability.strip_linux_availability(
+                archive
+            )
+
+            symbol = json.loads(
+                (archive / "data" / "documentation" / "foosymbol.json").read_text()
+            )
+            platform_names = {p["name"] for p in symbol["metadata"]["platforms"]}
+            self.assertNotIn("Linux", platform_names)
+            self.assertEqual(platform_names, {"Swift", "Xcode"})
+            self.assertNotIn(
+                "platforms", symbol["primaryContentSections"][0]["declarations"][0]
+            )
+            # Unrelated keys preserved.
+            self.assertEqual(symbol["metadata"]["title"], "FooSymbol")
+            self.assertEqual(
+                symbol["primaryContentSections"][0]["declarations"][0]["tokens"],
+                [{"text": "func foo()"}],
+            )
+
+            self.assertEqual(scanned, 2)
+            self.assertEqual(modified, 1)
+            self.assertEqual(removed, 2)
+
+    def test_leaves_non_linux_declaration_platforms_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = _make_archive_with_platforms(Path(tmp))
+            scanned, modified, removed = strip_availability.strip_linux_availability(
+                archive
+            )
+
+            symbol = json.loads(
+                (archive / "data" / "documentation" / "foosymbol.json").read_text()
+            )
+            self.assertEqual(
+                symbol["metadata"]["platforms"], [{"name": "iOS", "introducedAt": "13.0"}]
+            )
+            self.assertEqual(
+                symbol["primaryContentSections"][0]["declarations"][0]["platforms"],
+                ["macOS"],
+            )
+            self.assertEqual(modified, 0)
+            self.assertEqual(removed, 0)
+
+    def test_archive_without_platforms_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "Testing.doccarchive"
+            data_dir = archive / "data"
+            data_dir.mkdir(parents=True)
+            payload = {"metadata": {"title": "X"}, "kind": "article"}
+            (data_dir / "x.json").write_text(json.dumps(payload))
+
+            scanned, modified, removed = strip_availability.strip_linux_availability(
+                archive
+            )
+            self.assertEqual(scanned, 1)
+            self.assertEqual(modified, 0)
+            self.assertEqual(removed, 0)
+            self.assertEqual(
+                json.loads((data_dir / "x.json").read_text()), payload
+            )
 
 
 def _make_archive_with_language_variants(root, archive_name="Swift.doccarchive"):

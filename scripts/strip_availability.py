@@ -38,6 +38,7 @@ import sys
 import tempfile
 
 TARGET_KEY = "platforms"
+LINUX_PLATFORM_NAME = "Linux"
 
 
 def strip(node):
@@ -55,11 +56,48 @@ def strip(node):
     return removed
 
 
-def process_file(path):
+def _is_linux_entry(entry):
+    if isinstance(entry, str):
+        return entry == LINUX_PLATFORM_NAME
+    if isinstance(entry, dict):
+        return entry.get("name") == LINUX_PLATFORM_NAME
+    return False
+
+
+def strip_linux(node):
+    """Recursively remove only the Linux entry from every TARGET_KEY list.
+
+    Unlike strip(), this leaves "platforms" and its other entries (Swift,
+    Xcode, real Apple-platform badges) intact -- it only removes the Linux
+    entry DocC synthesizes from the build host's target triple when a
+    package target's symbol graph is extracted on a Linux toolchain, as
+    swift-testing's is, since the combined build runs inside a Linux
+    container.
+    """
+    removed = 0
+    if isinstance(node, dict):
+        if TARGET_KEY in node and isinstance(node[TARGET_KEY], list):
+            before = node[TARGET_KEY]
+            after = [entry for entry in before if not _is_linux_entry(entry)]
+            removed += len(before) - len(after)
+            if len(after) != len(before):
+                if after:
+                    node[TARGET_KEY] = after
+                else:
+                    del node[TARGET_KEY]
+        for v in node.values():
+            removed += strip_linux(v)
+    elif isinstance(node, list):
+        for v in node:
+            removed += strip_linux(v)
+    return removed
+
+
+def process_file(path, strip_fn=strip):
     with open(path, "rb") as f:
         data = json.load(f)
 
-    removed = strip(data)
+    removed = strip_fn(data)
     if removed == 0:
         return 0
 
@@ -97,8 +135,12 @@ def main():
     )
 
 
-def strip_archive(archive_path):
-    """Strip every 'platforms' key from JSON files under <archive>/data/.
+def strip_archive(archive_path, strip_fn=strip):
+    """Strip 'platforms' data from JSON files under <archive>/data/.
+
+    By default deletes every 'platforms' key outright (strip_fn=strip). Pass
+    strip_fn=strip_linux to remove only the Linux entry from each list
+    instead, leaving the rest of the platform data in place.
 
     Returns (files_scanned, files_modified, keys_removed).
     Raises ValueError if archive_path doesn't look like a .doccarchive
@@ -123,7 +165,7 @@ def strip_archive(archive_path):
             path = os.path.join(root, name)
             files_scanned += 1
             try:
-                removed = process_file(path)
+                removed = process_file(path, strip_fn)
             except json.JSONDecodeError as e:
                 sys.stderr.write(f"skip (invalid JSON): {path}: {e}\n")
                 continue
@@ -132,6 +174,15 @@ def strip_archive(archive_path):
                 keys_removed += removed
 
     return files_scanned, files_modified, keys_removed
+
+
+def strip_linux_availability(archive_path):
+    """Remove only the Linux entry from every 'platforms' list in an archive.
+
+    Thin wrapper around strip_archive() using strip_linux() -- see its
+    docstring for why this is narrower than the default full wipe.
+    """
+    return strip_archive(archive_path, strip_fn=strip_linux)
 
 
 if __name__ == "__main__":
