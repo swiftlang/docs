@@ -31,7 +31,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ matrix.ref }}
+          ref: >-
+            ${{ (github.event_name == 'pull_request' && matrix.ref == github.event.pull_request.base.ref)
+                && github.event.pull_request.head.sha
+                || matrix.ref }}
 
       # - uses: actions/cache@v6
       #   with:
