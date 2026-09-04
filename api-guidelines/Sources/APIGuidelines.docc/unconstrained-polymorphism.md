@@ -1,0 +1,52 @@
+# Take extra care with unconstrained polymorphism
+
+Take extra care with unconstrained polymorphism to avoid ambiguities in overload sets.
+
+## Overview
+
+Unconstrained polymorphism includes types such as `Any`, `AnyObject`, and unconstrained generic parameters.
+
+⛔ For example, consider this overload set:
+
+```swift
+struct Array<Element> {
+  /// Inserts `newElement` at `self.endIndex`.
+  public mutating func append(_ newElement: Element)
+
+  /// Inserts the contents of `newElements`, in order, at
+  /// `self.endIndex`.
+  public mutating func append<S: SequenceType>(_ newElements: S)
+    where S.Generator.Element == Element
+}
+```
+
+These methods form a semantic family, and the argument types
+appear at first to be sharply distinct.  However, when `Element`
+is `Any`, a single element can have the same type as a sequence of
+elements.
+
+⛔ Because `Element` can be `Any`, this call is ambiguous between the two overloads:
+
+```swift
+var values: [Any] = [1, "a"]
+values.append([2, 3, 4]) // [1, "a", [2, 3, 4]] or [1, "a", 2, 3, 4]?
+```
+
+✅ To eliminate the ambiguity, name the second overload more
+explicitly.
+
+```swift
+struct Array {
+  /// Inserts `newElement` at `self.endIndex`.
+  public mutating func append(_ newElement: Element)
+
+  /// Inserts the contents of `newElements`, in order, at
+  /// `self.endIndex`.
+  public mutating func append<S: SequenceType>(**contentsOf** newElements: S)
+    where S.Generator.Element == Element
+}
+```
+
+Notice how the new name better matches the documentation comment.
+In this case, the act of writing the documentation comment
+actually brought the issue to the API author's attention.
