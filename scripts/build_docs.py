@@ -66,6 +66,19 @@ DOCC_BUILD_FLAGS = [
 # Common template files to copy into each .docc catalog before building
 TEMPLATE_FILES = ["header.html", "footer.html"]
 
+# Shared favicon copied verbatim (no placeholder substitution) into each .docc
+# catalog root before building. DocC recognizes a favicon.ico at the catalog
+# root as a custom favicon and copies it into the output, overriding its own
+# default icon (see swift-docc's DocumentationBundleFileTypes.isCustomFavicon).
+FAVICON_FILE = "favicon.ico"
+
+# Shared mask-icon SVG (Safari pinned-tab icon). Unlike favicon.ico, DocC has
+# no catalog-level override for this file — a loose favicon.svg dropped into
+# a .docc catalog is silently discarded by `docc convert`. The only place
+# this can be fixed is the post-transform restore in
+# _finalize_combined_archive (see restore_custom_favicon).
+FAVICON_SVG_FILE = "favicon.svg"
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -468,7 +481,8 @@ def render_common_template(text, year=None):
 
 
 def install_templates(catalog_dir, common_dir, source_id):
-    """Copy common template files (header.html, footer.html) into a .docc catalog."""
+    """Copy common template files (header.html, footer.html) and the shared
+    favicon.ico into a .docc catalog."""
     for tmpl in TEMPLATE_FILES:
         src = common_dir / tmpl
         dst = catalog_dir / tmpl
@@ -476,6 +490,13 @@ def install_templates(catalog_dir, common_dir, source_id):
             print(f"  WARNING: overwriting existing {tmpl} in {source_id} catalog")
         dst.write_text(render_common_template(src.read_text()))
         print(f"  Installed {tmpl} -> {catalog_dir}/")
+
+    favicon_src = common_dir / FAVICON_FILE
+    favicon_dst = catalog_dir / FAVICON_FILE
+    if favicon_dst.exists():
+        print(f"  WARNING: overwriting existing {FAVICON_FILE} in {source_id} catalog")
+    shutil.copyfile(str(favicon_src), str(favicon_dst))
+    print(f"  Installed {FAVICON_FILE} -> {catalog_dir}/")
 
 
 def find_doccarchive(search_dir, target):
@@ -874,6 +895,22 @@ def inject_custom_templates_into_stubs(archive_path, common_dir):
     return patched
 
 
+def restore_custom_favicon(archive_path, common_dir, filename=FAVICON_FILE):
+    """Reinstate a shared favicon asset after the static-hosting transform.
+
+    Workaround for `docc process-archive transform-for-static-hosting`
+    unconditionally overwriting favicon.ico/favicon.svg with its own bundled
+    defaults (swift-docc's TransformForStaticHostingAction copies every file
+    from its HTML template directory over the output, with no exclusion for
+    either file). Since this transform always runs last, this is the only
+    point where the custom favicon needs to be reapplied — drop this when
+    swift-docc excludes these files from that copy.
+    """
+    favicon_src = Path(common_dir) / filename
+    favicon_dst = Path(archive_path) / filename
+    shutil.copyfile(str(favicon_src), str(favicon_dst))
+
+
 def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd, prior_failed, common_dir=None, navigation=None, hosting_base_path=None, canonical_base_url=None):
     """Merge per-source archives and apply the static-hosting transform.
 
@@ -964,6 +1001,12 @@ def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd,
         patched = inject_custom_templates_into_stubs(combined_output, common_dir)
         print(f"Patched custom-header/footer into {patched} per-route stub(s).")
 
+        # Workaround: transform-for-static-hosting overwrites the favicons
+        # with DocC's own defaults (see restore_custom_favicon docstring).
+        restore_custom_favicon(combined_output, common_dir)
+        restore_custom_favicon(combined_output, common_dir, FAVICON_SVG_FILE)
+        print("Restored shared favicon.ico/favicon.svg after static-hosting transform.")
+
     prior_steps.append("static-hosting-transform")
 
     if canonical_base_url:
@@ -1029,8 +1072,8 @@ def main():
     check_prerequisites()
     tools = discover_tools()
 
-    # Validate common template files exist
-    for tmpl in TEMPLATE_FILES:
+    # Validate common template files and the shared favicon exist
+    for tmpl in TEMPLATE_FILES + [FAVICON_FILE, FAVICON_SVG_FILE]:
         tmpl_path = common_dir / tmpl
         if not tmpl_path.is_file():
             print(f"Error: common template '{tmpl}' not found at {tmpl_path}")
