@@ -2065,6 +2065,7 @@ class InstallTemplates(unittest.TestCase):
             common.mkdir()
             (common / "header.html").write_text("HDR")
             (common / "footer.html").write_text("Copyright {{COPYRIGHT_YEAR}}")
+            (common / "favicon.ico").write_bytes(b"ICO")
             catalog = root / "Foo.docc"
             catalog.mkdir()
             build_docs.install_templates(catalog, common, "foo")
@@ -2080,11 +2081,42 @@ class InstallTemplates(unittest.TestCase):
             common.mkdir()
             (common / "header.html").write_text("HDR")
             (common / "footer.html").write_text("FTR")
+            (common / "favicon.ico").write_bytes(b"ICO")
             catalog = root / "Foo.docc"
             catalog.mkdir()
             (catalog / "footer.html").write_text("stale")
             build_docs.install_templates(catalog, common, "foo")
             self.assertEqual((catalog / "footer.html").read_text(), "FTR")
+
+    def _write_common_templates(self, common):
+        (common / "header.html").write_text("HDR")
+        (common / "footer.html").write_text("FTR")
+
+    def test_copies_favicon_byte_for_byte(self):
+        favicon_bytes = bytes(range(256))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common = root / "common"
+            common.mkdir()
+            self._write_common_templates(common)
+            (common / "favicon.ico").write_bytes(favicon_bytes)
+            catalog = root / "Foo.docc"
+            catalog.mkdir()
+            build_docs.install_templates(catalog, common, "foo")
+            self.assertEqual((catalog / "favicon.ico").read_bytes(), favicon_bytes)
+
+    def test_warns_and_overwrites_existing_favicon(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common = root / "common"
+            common.mkdir()
+            self._write_common_templates(common)
+            (common / "favicon.ico").write_bytes(b"NEW")
+            catalog = root / "Foo.docc"
+            catalog.mkdir()
+            (catalog / "favicon.ico").write_bytes(b"stale")
+            build_docs.install_templates(catalog, common, "foo")
+            self.assertEqual((catalog / "favicon.ico").read_bytes(), b"NEW")
 
 
 class InjectCustomTemplatesIntoStubs(unittest.TestCase):

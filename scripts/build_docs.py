@@ -66,6 +66,12 @@ DOCC_BUILD_FLAGS = [
 # Common template files to copy into each .docc catalog before building
 TEMPLATE_FILES = ["header.html", "footer.html"]
 
+# Shared favicon copied verbatim (no placeholder substitution) into each .docc
+# catalog root before building. DocC recognizes a favicon.ico at the catalog
+# root as a custom favicon and copies it into the output, overriding its own
+# default icon (see swift-docc's DocumentationBundleFileTypes.isCustomFavicon).
+FAVICON_FILE = "favicon.ico"
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -477,7 +483,8 @@ def render_common_template(text, year=None):
 
 
 def install_templates(catalog_dir, common_dir, source_id):
-    """Copy common template files (header.html, footer.html) into a .docc catalog."""
+    """Copy common template files (header.html, footer.html) and the shared
+    favicon.ico into a .docc catalog."""
     for tmpl in TEMPLATE_FILES:
         src = common_dir / tmpl
         dst = catalog_dir / tmpl
@@ -485,6 +492,13 @@ def install_templates(catalog_dir, common_dir, source_id):
             print(f"  WARNING: overwriting existing {tmpl} in {source_id} catalog")
         dst.write_text(render_common_template(src.read_text()))
         print(f"  Installed {tmpl} -> {catalog_dir}/")
+
+    favicon_src = common_dir / FAVICON_FILE
+    favicon_dst = catalog_dir / FAVICON_FILE
+    if favicon_dst.exists():
+        print(f"  WARNING: overwriting existing {FAVICON_FILE} in {source_id} catalog")
+    shutil.copyfile(str(favicon_src), str(favicon_dst))
+    print(f"  Installed {FAVICON_FILE} -> {catalog_dir}/")
 
 
 def find_doccarchive(search_dir, target):
@@ -1047,8 +1061,8 @@ def main():
     check_prerequisites()
     tools = discover_tools()
 
-    # Validate common template files exist
-    for tmpl in TEMPLATE_FILES:
+    # Validate common template files and the shared favicon exist
+    for tmpl in TEMPLATE_FILES + [FAVICON_FILE]:
         tmpl_path = common_dir / tmpl
         if not tmpl_path.is_file():
             print(f"Error: common template '{tmpl}' not found at {tmpl_path}")
