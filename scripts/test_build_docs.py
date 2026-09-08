@@ -2030,13 +2030,14 @@ class FinalizeCombinedArchive(unittest.TestCase):
 
     def test_favicon_survives_static_hosting_transform(self):
         """Reproduces docc process-archive transform-for-static-hosting
-        overwriting favicon.ico with its own bundled default, and verifies
-        build_docs.py restores the shared one afterward."""
+        overwriting favicon.ico/favicon.svg with its own bundled defaults,
+        and verifies build_docs.py restores the shared ones afterward."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             common_dir = tmp_path / "common"
             common_dir.mkdir()
             (common_dir / "favicon.ico").write_bytes(b"SWIFT-FAVICON")
+            (common_dir / "favicon.svg").write_bytes(b"SWIFT-FAVICON-SVG")
             (common_dir / "header.html").write_text("HDR")
             (common_dir / "footer.html").write_text("FTR")
             archive = tmp_path / "a.doccarchive"
@@ -2051,10 +2052,12 @@ class FinalizeCombinedArchive(unittest.TestCase):
                 if "merge" in cmd:
                     (out / "data").mkdir(parents=True, exist_ok=True)
                     (out / "favicon.ico").write_bytes(b"SWIFT-FAVICON")
+                    (out / "favicon.svg").write_bytes(b"DOCC-DEFAULT-GLOBE-SVG")
                 else:
                     # Simulate transform-for-static-hosting clobbering the
-                    # favicon with DocC's own bundled default.
+                    # favicons with DocC's own bundled defaults.
                     (out / "favicon.ico").write_bytes(b"DOCC-DEFAULT-GLOBE")
+                    (out / "favicon.svg").write_bytes(b"DOCC-DEFAULT-GLOBE-SVG")
                 return subprocess.CompletedProcess(cmd, 0)
 
             with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
@@ -2066,6 +2069,9 @@ class FinalizeCombinedArchive(unittest.TestCase):
             combined_output = tmp_path / "main"
             self.assertEqual(
                 (combined_output / "favicon.ico").read_bytes(), b"SWIFT-FAVICON"
+            )
+            self.assertEqual(
+                (combined_output / "favicon.svg").read_bytes(), b"SWIFT-FAVICON-SVG"
             )
 
 
@@ -2304,6 +2310,25 @@ class RestoreCustomFavicon(unittest.TestCase):
             build_docs.restore_custom_favicon(archive, common)
             self.assertEqual(
                 (archive / "favicon.ico").read_bytes(), b"SWIFT-FAVICON"
+            )
+
+    def test_restores_favicon_svg_when_filename_given(self):
+        """favicon.svg has no DocC catalog-level override at all (unlike
+        favicon.ico), so this post-transform restore is the only place it
+        can ever be fixed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common = root / "common"
+            common.mkdir()
+            (common / "favicon.svg").write_bytes(b"SWIFT-FAVICON-SVG")
+            archive = root / "main"
+            archive.mkdir()
+            (archive / "favicon.svg").write_bytes(b"DOCC-DEFAULT-GLOBE-SVG")
+            build_docs.restore_custom_favicon(
+                archive, common, filename=build_docs.FAVICON_SVG_FILE
+            )
+            self.assertEqual(
+                (archive / "favicon.svg").read_bytes(), b"SWIFT-FAVICON-SVG"
             )
 
 
