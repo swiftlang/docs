@@ -8,5 +8,6 @@ Package.resolved
 .build-output/
 **/*.docc/header.html
 **/*.docc/footer.html
+**/*.docc/favicon.ico
 scripts/__pycache__/
 scripts/.coverage
