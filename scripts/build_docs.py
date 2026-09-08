@@ -906,6 +906,22 @@ def inject_custom_templates_into_stubs(archive_path, common_dir):
     return patched
 
 
+def restore_custom_favicon(archive_path, common_dir):
+    """Reinstate the shared favicon.ico after the static-hosting transform.
+
+    Workaround for `docc process-archive transform-for-static-hosting`
+    unconditionally overwriting the archive's favicon.ico with its own
+    bundled default (swift-docc's TransformForStaticHostingAction copies
+    every file from its HTML template directory over the output, with no
+    exclusion for favicon.ico). Since this transform always runs last, this
+    is the only point where the custom favicon needs to be reapplied — drop
+    this when swift-docc excludes favicon.ico from that copy.
+    """
+    favicon_src = Path(common_dir) / FAVICON_FILE
+    favicon_dst = Path(archive_path) / FAVICON_FILE
+    shutil.copyfile(str(favicon_src), str(favicon_dst))
+
+
 def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd, prior_failed, common_dir=None, navigation=None, hosting_base_path=None, canonical_base_url=None):
     """Merge per-source archives and apply the static-hosting transform.
 
@@ -995,6 +1011,11 @@ def _finalize_combined_archive(all_archives, output_dir, version_slug, docc_cmd,
     if common_dir is not None:
         patched = inject_custom_templates_into_stubs(combined_output, common_dir)
         print(f"Patched custom-header/footer into {patched} per-route stub(s).")
+
+        # Workaround: transform-for-static-hosting overwrites favicon.ico
+        # with DocC's own default (see restore_custom_favicon docstring).
+        restore_custom_favicon(combined_output, common_dir)
+        print("Restored shared favicon.ico after static-hosting transform.")
 
     prior_steps.append("static-hosting-transform")
 

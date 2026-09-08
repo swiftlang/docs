@@ -12,7 +12,7 @@ python3 -m http.server 8123 --directory .build-output
 Then in another terminal:
 
 ```bash
-open http://localhost:8123/latest/documentation/
+open http://localhost:8123/main/documentation/
 ```
 
 Serve from `.build-output` (the parent), not `.build-output/latest`: the build
