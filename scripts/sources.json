@@ -40,7 +40,8 @@
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-package-manager.git",
       "ref": "main",
-      "targets": ["PackageManagerDocs", "PackageDescription", "PackagePlugin"]
+      "targets": ["PackageManagerDocs", "PackageDescription", "PackagePlugin"],
+      "add_docc_plugin": true
     },
     {
       "id": "swift-testing",
