@@ -70,31 +70,3 @@ jobs:
         with:
           name: combined-documentation-latest
           path: combined-documentation-latest.tar.gz
-
-  # build-docs-6-4:
-  #   name: Build combined documentation (6.4)
-  #   if: github.event_name != 'schedule' || github.repository == 'swiftlang/docs'
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: swiftlang/swift:nightly-6.4.x-jammy
-  #   steps:
-  #     - uses: actions/checkout@v7
-  #       with:
-  #         ref: >-
-  #           ${{ (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'release/6.4.x')
-  #               && github.event.pull_request.head.sha
-  #               || 'release/6.4.x' }}
-
-  #     - name: Install Python
-  #       run: apt-get update && apt-get install -y python3
-
-  #     - name: Build documentation
-  #       run: python3 scripts/build_docs.py --output-dir "$GITHUB_WORKSPACE/build-output"
-
-  #     - name: Package build output
-  #       run: tar -czf "$GITHUB_WORKSPACE/combined-documentation-6.4.tar.gz" -C "$GITHUB_WORKSPACE/build-output" .
-
-  #     - uses: actions/upload-artifact@v7
-  #       with:
-  #         name: combined-documentation-6.4
-  #         path: combined-documentation-6.4.tar.gz
