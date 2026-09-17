@@ -14,34 +14,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-docs:
-    name: Build combined documentation (${{ matrix.slug }})
+  build-docs-main:
+    name: Build combined documentation (main)
     if: github.event_name != 'schedule' || github.repository == 'swiftlang/docs'
     runs-on: ubuntu-latest
     container:
       image: swiftlang/swift:nightly-main-jammy
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - slug: main
-            ref: main
-          - slug: "6.4"
-            ref: release/6.4.x
     steps:
       - uses: actions/checkout@v7
         with:
           ref: >-
-            ${{ (github.event_name == 'pull_request' && matrix.ref == github.event.pull_request.base.ref)
+            ${{ (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main')
                 && github.event.pull_request.head.sha
-                || matrix.ref }}
-
-      # - uses: actions/cache@v6
-      #   with:
-      #     path: .workspace
-      #     key: docs-workspace-${{ hashFiles('scripts/sources.json') }}
-      #     restore-keys: |
-      #       docs-workspace-
+                || 'main' }}
 
       - name: Install Python
         run: apt-get update && apt-get install -y python3
@@ -50,9 +35,66 @@ jobs:
         run: python3 scripts/build_docs.py --output-dir "$GITHUB_WORKSPACE/build-output"
 
       - name: Package build output
-        run: tar -czf "$GITHUB_WORKSPACE/combined-documentation-${{ matrix.slug }}.tar.gz" -C "$GITHUB_WORKSPACE/build-output" .
+        run: tar -czf "$GITHUB_WORKSPACE/combined-documentation-main.tar.gz" -C "$GITHUB_WORKSPACE/build-output" .
 
       - uses: actions/upload-artifact@v7
         with:
-          name: combined-documentation-${{ matrix.slug }}
-          path: combined-documentation-${{ matrix.slug }}.tar.gz
+          name: combined-documentation-main
+          path: combined-documentation-main.tar.gz
+
+  build-docs-latest:
+    name: Build combined documentation (latest)
+    if: github.event_name != 'schedule' || github.repository == 'swiftlang/docs'
+    runs-on: ubuntu-latest
+    container:
+      # update to the official swift:6.4 image when it's published and available
+      image: swiftlang/swift:nightly-6.4.x-jammy
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: >-
+            ${{ (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'release/6.4.x')
+                && github.event.pull_request.head.sha
+                || 'release/6.4.x' }}
+
+      - name: Install Python
+        run: apt-get update && apt-get install -y python3
+
+      - name: Build documentation
+        run: python3 scripts/build_docs.py --output-dir "$GITHUB_WORKSPACE/build-output"
+
+      - name: Package build output
+        run: tar -czf "$GITHUB_WORKSPACE/combined-documentation-latest.tar.gz" -C "$GITHUB_WORKSPACE/build-output" .
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: combined-documentation-latest
+          path: combined-documentation-latest.tar.gz
+
+  # build-docs-6-4:
+  #   name: Build combined documentation (6.4)
+  #   if: github.event_name != 'schedule' || github.repository == 'swiftlang/docs'
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: swiftlang/swift:nightly-6.4.x-jammy
+  #   steps:
+  #     - uses: actions/checkout@v7
+  #       with:
+  #         ref: >-
+  #           ${{ (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'release/6.4.x')
+  #               && github.event.pull_request.head.sha
+  #               || 'release/6.4.x' }}
+
+  #     - name: Install Python
+  #       run: apt-get update && apt-get install -y python3
+
+  #     - name: Build documentation
+  #       run: python3 scripts/build_docs.py --output-dir "$GITHUB_WORKSPACE/build-output"
+
+  #     - name: Package build output
+  #       run: tar -czf "$GITHUB_WORKSPACE/combined-documentation-6.4.tar.gz" -C "$GITHUB_WORKSPACE/build-output" .
+
+  #     - uses: actions/upload-artifact@v7
+  #       with:
+  #         name: combined-documentation-6.4
+  #         path: combined-documentation-6.4.tar.gz
