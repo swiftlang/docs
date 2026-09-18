@@ -27,8 +27,3 @@ Official libraries maintained by the Swift project.
 - [swift-tools-protocols](https://swiftpackageindex.com/swiftlang/swift-tools-protocols) — LSP/BSP support types
 - [indexstore-db](https://swiftpackageindex.com/swiftlang/indexstore-db) — Index database library for sourcekit-lsp
 - [swift-llvm-bindings](https://swiftpackageindex.com/swiftlang/swift-llvm-bindings) — Swift bindings for LLVM APIs
-
-## Interoperability libraries
-
-- [swift-java](https://swiftpackageindex.com/swiftlang/swift-java) — Java interoperability support for Swift
-- [swift-java-jni-core](https://swiftpackageindex.com/swiftlang/swift-java-jni-core) — Core JNI support underlying swift-java
