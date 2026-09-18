@@ -10,3 +10,4 @@ Package.resolved
 **/*.docc/footer.html
 **/*.docc/favicon.ico
 scripts/__pycache__/
+scripts/.coverage
