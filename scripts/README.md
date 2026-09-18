@@ -76,17 +76,69 @@ python3 scripts/validate_navigation.py --archive path/to/combined.doccarchive
 
 `--navigation` and `--sources` can override the input files for experimentation.
 
-## Building multiple branches (main + release branches)
+## Inspecting what's published (build-manifest.json)
 
-`build_documentation.yml`'s `build-docs` job builds two variants of
-the documentation - using a matrix keyed by branch - for `main` and the latest
-release branch (such as `release/6.4.x.
+Every build writes a `build-manifest.json` into the output directory, alongside the
+merged archive. It lets us check the state of a published site - how recent it is,
+and what specific content it sourced from.
 
-There isn't a shared multi-version file or `--sources` override — each release branch
-owns and maintains its own manifest.
+- `https://docs.swift.org/main/build-manifest.json` — tracks the `main` branch build
+- `https://docs.swift.org/latest/build-manifest.json` — tracks the current release
+   build (such as `release/6.4.x`)
 
-### Adding a new release branch
+### Schema
 
-When a new release branch gets established, we start with branch creation, update its
-`sources.json`, then add or update the entry to the `matrix.include` list in
-`build_documentation.yml` on `main`.
+The rough schema for this file:
+
+```jsonc
+{
+  "version": { "slug": "main" },            // from sources.json's top-level "version"
+  "build_time": "2026-08-25T07:27:56Z",     // UTC, ISO 8601 — when build_docs.py ran
+  "sources": [
+    {
+      "id": "swift-book",                   // matches an "id" in sources.json
+      "type": "git",                        // "git" | "archive" | "local"
+      "ref": "main",                        // configured branch/tag (git only)
+      "commit": "3c9dcf6530bd3088cff..."    // resolved commit SHA (git only)
+    },
+    {
+      "id": "swift-stdlib",
+      "type": "archive",
+      "ref": "",
+      "commit": "",
+      "url": "https://download.swift.org/docs/main/swift_docc.zip"  // archive only
+    },
+    {
+      "id": "swift-linux",                  // a "local" source — one of this repo's
+      "type": "local",                      // own packages (linux, windows, libraries,
+      "ref": "unknown",                     // apple-platforms, prior)
+      "commit": "unknown"
+    }
+  ]
+}
+```
+
+**Known gap:** `type: "local"` entries (this repo's own packages) always report
+`ref`/`commit` as `"unknown"` in the published manifest.
+
+### Using it to check recency against git/GitHub
+
+1. Fetch the manifest for the version you care about (`main` or `latest`).
+2. For each `"type": "git"` source, compare its `commit` against the HEAD of `ref` on
+   the corresponding GitHub repo (repo URLs are in `sources.json`):
+   ```bash
+   gh api repos/swiftlang/<repo>/commits/<ref> --jq .sha
+   # or
+   git ls-remote https://github.com/swiftlang/<repo>.git <ref>
+   ```
+   Equal SHAs mean that source's content is current as of `build_time`. If they
+   differ, `git log <manifest-commit>..<remote-HEAD>` on that repo shows exactly
+   what's missing from the published docs.
+3. For `"type": "archive"` sources (e.g. `swift-stdlib`), there's no commit to diff —
+   the `url` points at a branch-keyed snapshot on `download.swift.org`. Compare
+   `build_time` against that URL's `Last-Modified` header instead.
+4. For `"type": "local"` sources, compare `build_time` against this repo's own commit
+   history for that path, e.g. `git log -1 --format=%cI -- linux`, since the manifest
+   doesn't carry a usable commit for them.
+5. To see how far a release branch has drifted from `main` (or confirm a fix landed on
+   both), fetch both manifests and diff their `sources` arrays.
