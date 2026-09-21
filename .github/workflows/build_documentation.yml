@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       # update to the official swift:6.4 image when it's published and available
-      image: swiftlang/swift:nightly-6.4.x-jammy
+      image: swift:6.4
     steps:
       - uses: actions/checkout@v7
         with:
