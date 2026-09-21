@@ -8,7 +8,7 @@
       "id": "swift-book",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-book.git",
-      "ref": "main",
+      "ref": "release/6.4",
       "docc_catalog": "TSPL.docc",
       "preflight": "bin/generate-grammar"
     },
