@@ -1,0 +1,24 @@
+# Follow case conventions
+
+Follow case conventions.
+
+## Overview
+
+Names of types and protocols are `UpperCamelCase`. Everything else is `lowerCamelCase`.
+
+[Acronyms and initialisms](https://en.wikipedia.org/wiki/Acronym)
+that commonly appear as all upper case in American English should be
+uniformly up- or down-cased according to case conventions:
+
+```swift
+var **utf8**Bytes: [**UTF8**.CodeUnit]
+var isRepresentableAs**ASCII** = true
+var user**SMTP**Server: Secure**SMTP**Server
+```
+
+Other acronyms should be treated as ordinary words:
+
+```swift
+var **radar**Detector: **Radar**Scanner
+var enjoys**Scuba**Diving = true
+```
