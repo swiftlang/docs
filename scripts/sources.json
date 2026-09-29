@@ -13,6 +13,12 @@
       "preflight": "bin/generate-grammar"
     },
     {
+      "id": "api-guidelines",
+      "type": "local",
+      "path": "api-guidelines",
+      "targets": ["APIGuidelines"]
+    },
+    {
       "id": "swift-stdlib",
       "type": "archive",
       "url": "https://download.swift.org/docs/main/swift_docc.zip",
