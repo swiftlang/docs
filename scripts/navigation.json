@@ -59,6 +59,7 @@
     { "source": "swiftpm", "path": "/documentation/packagedescription" },
     { "source": "swiftpm", "path": "/documentation/packageplugin" },
     { "source": "swift-server-todos-tutorial", "path": "/tutorials/getting-started-swift-server" },
+    { "source": "swift-stdlib", "path": "/documentation/compatibilityspan" },
     { "source": "swift-stdlib", "path": "/documentation/cxx" },
     { "source": "swift-stdlib", "path": "/documentation/cxxstdlib" },
     { "source": "swift-stdlib", "path": "/documentation/distributed" },
