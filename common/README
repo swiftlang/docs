@@ -8,9 +8,18 @@ The common files need to be copied, or perhaps linked, into each of the DocC cat
 
 Both files are intentionally minimal:
 
-- `header.html` has no visible content. It's a reserved hook (DocC's
-  `custom-header` template) for a future documentation-version switcher —
-  add the switcher UI to the `#version-switcher` div when that lands.
+- `header.html` renders a thin bar above the DocC app itself — logo, "Swift"
+  wordmark, and a link to swift.org — via DocC's `custom-header` template
+  hook. swift-docc-render mounts the `custom-header` custom element as the
+  first child of `#app`, ahead of DocC's own masthead/navigator, so this
+  never needs to reach into DocC's rendered DOM (unlike an approach that
+  edits the masthead's `.pre-title`/`.nav-title` after the fact) — it's
+  purely static markup, no JS. It's styled with DocC's own CSS custom
+  properties (`var(--color-text)`, `var(--color-grid)`), which pierce the
+  Shadow DOM `custom-header` renders into, so it flips with light/dark mode
+  the same way the footer does. It also still reserves the
+  `#version-switcher` div for a future documentation-version switcher — add
+  the switcher UI there when that lands.
 - `footer.html` carries the copyright/trademark notice, the same legal links
   (License, Security, Privacy Policy, Cookies) swift.org's footer has, and
   an Adobe Analytics page-activation snippet mirroring swift.org's
