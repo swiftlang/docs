@@ -20,6 +20,11 @@ bakes a `/latest/` hosting base path into every asset URL, so the `/latest/`
 prefix must map to the `latest/` directory. This example avoids port 8000,
 which can be commonly used by other apps or examples. 
 
+To skip the build, download the output from a nightly or pull request build
+and serve it with the same `http.server` command. See
+[Viewing a built copy of the combined documentation](../CONTRIBUTING.md#viewing-a-built-copy-of-the-combined-documentation)
+in `CONTRIBUTING.md`.
+
 > Note: Ensure that you have a version of Swift available that will build the 
 > content that you point at in sources.json. For latest development tree builds,
 > that typically requires either the latest Xcode beta or a Swift nightly development

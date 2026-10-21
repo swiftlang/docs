@@ -53,3 +53,56 @@ swift package generate-documentation --analyze --warnings-as-errors
 
 2. Create a pull request in this repository.
 3. Write a brief message in the pull request to introduce your work in context.
+
+### Viewing a built copy of the combined documentation
+
+Every pull request and every nightly build produces the full combined site as a downloadable archive.
+You can browse it locally without installing a Swift toolchain.
+
+You need the [GitHub CLI][gh], signed in with `gh auth login`.
+GitHub requires a login to download build artifacts, even from public repositories.
+
+1. Find the build to download.
+
+   For the latest nightly build, list the scheduled runs and note the run ID:
+
+   ```bash
+   gh run list -R swiftlang/docs --workflow build_documentation.yml --event schedule --limit 1
+   ```
+
+   For a pull request, get the run ID from its checks.
+   The ID is the number after `/runs/` in the link:
+
+   ```bash
+   gh pr checks <pr-number> -R swiftlang/docs --json name,link
+   ```
+
+2. Download the archive into a new, empty directory.
+
+   ```bash
+   mkdir docs-preview && cd docs-preview
+   gh run download <run-id> -R swiftlang/docs -n combined-documentation-main
+   mkdir site && tar -xzf combined-documentation-main.tar.gz -C site
+   ```
+
+   Use `combined-documentation-latest` instead to get the current release build.
+   Pull requests that target `main` change the `main` build.
+   Pull requests that target a release branch, such as `release/6.4.x`, change the `latest` build.
+
+3. Serve the site.
+
+   ```bash
+   python3 -m http.server 8123 --directory site
+   ```
+
+4. Open <http://localhost:8123/main/documentation/> in your browser.
+   For the `latest` archive, open <http://localhost:8123/latest/documentation/>.
+
+Serve the `site` directory, not the `main` or `latest` directory inside it.
+The build bakes that prefix into every asset URL, so the prefix must exist in the served path.
+See [scripts/README.md](scripts/README.md) for more on the build.
+
+Build artifacts expire after 90 days.
+`site/build-manifest.json` records when the build ran and which commit of each source it used.
+
+[gh]: https://cli.github.com/
