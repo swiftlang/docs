@@ -30,6 +30,84 @@ in `CONTRIBUTING.md`.
 > that typically requires either the latest Xcode beta or a Swift nightly development
 > build to support Swift, SwiftPM, swift-testing, and other core projects.
 
+## Building a source from generated symbol graphs
+
+Most sources build with `swift package generate-documentation`: list the
+package's `targets` and `build_docs.py` runs the DocC plugin.
+Some packages can't use the plugin.
+For those, `build_docs.py` can run `docc convert` directly, against symbol
+graphs that the source produces itself.
+Four `sources.json` fields make that work.
+
+| Field | Applies to | Meaning |
+| --- | --- | --- |
+| `docc_catalog` | `git`, `local` | Path to a `.docc` catalog, relative to the checkout. Mutually exclusive with `targets`. |
+| `preflight` | `git`, `local` | A shell command that runs in the checkout before the build. |
+| `additional_symbol_graph_dir` | with `docc_catalog` | Directory of `.symbols.json` files, relative to the checkout. Passed to `docc convert --additional-symbol-graph-dir`. |
+| `reuse_checkout` | `git` | The `id` of an earlier `git` source whose checkout this source shares. |
+
+### `preflight`
+
+`build_docs.py` runs the command with `bash -c`.
+The working directory is the source's checkout.
+The environment includes the source's `env` entries and `DOCS_ROOT`, the
+absolute path of this repository's root.
+Use `DOCS_ROOT` to run a helper script that lives in this repository, because
+the checkout belongs to another project:
+
+```jsonc
+"preflight": "bash \"$DOCS_ROOT/scripts/extract-swift-foundation-symbol-graphs.sh\""
+```
+
+A non-zero exit fails the source.
+
+### `additional_symbol_graph_dir`
+
+The directory must exist and hold at least one file when the build reaches
+`docc convert`.
+If it doesn't, the source fails with an error that names the directory.
+This usually means the `preflight` didn't produce the symbol graphs.
+Validation rejects the field on `archive` sources and on sources that use
+`targets`.
+
+### `reuse_checkout`
+
+Several catalogs can live in one repository.
+Give the first source a `repo` and a `ref`, and have later sources name it:
+
+```jsonc
+{
+  "id": "swift-foundation-essentials",
+  "type": "git",
+  "repo": "https://github.com/swiftlang/swift-foundation.git",
+  "ref": "main",
+  "docc_catalog": "Sources/FoundationEssentials/FoundationEssentials.docc",
+  "preflight": "bash \"$DOCS_ROOT/scripts/extract-swift-foundation-symbol-graphs.sh\"",
+  "additional_symbol_graph_dir": ".build/symbols/FoundationEssentials"
+},
+{
+  "id": "swift-foundation-internationalization",
+  "type": "git",
+  "reuse_checkout": "swift-foundation-essentials",
+  "docc_catalog": "Sources/FoundationInternationalization/FoundationInternationalization.docc",
+  "additional_symbol_graph_dir": ".build/symbols/FoundationInternationalization"
+}
+```
+
+The second source clones nothing and builds nothing twice.
+It uses the first source's checkout, including the files its `preflight` made.
+Its `build-manifest.json` entry records the first source's `ref` and the checkout's commit.
+
+Rules for `reuse_checkout`:
+
+- The value must name an earlier `git` source that has its own `repo`.
+  Sources build in `sources.json` order.
+- The reusing source can't set `repo` or `ref`.
+- Chains aren't allowed. Point every reusing source at the original.
+- Building a reusing source alone with `--only` fails unless the first source's
+  checkout already exists in the workspace.
+  Build the first source before it.
+
 ## Navigation manifest (combined sidebar curation)
 
 `navigation.json` controls the left-hand navigator of the **combined** archive

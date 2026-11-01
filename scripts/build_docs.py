@@ -177,6 +177,10 @@ def validate_sources(config):
         errors.append("'sources' must be an array")
         return errors
 
+    # Ids of earlier `git` sources that clone their own repo — the only valid
+    # targets for another source's `reuse_checkout`.
+    earlier_clones = set()
+
     for i, entry in enumerate(sources):
         entry_id = entry.get("id", "")
         label = f"'{entry_id}' (index {i})" if entry_id else f"Entry {i}"
@@ -196,11 +200,37 @@ def validate_sources(config):
         if entry_type == "local" and not entry.get("path"):
             errors.append(f"{label} is type 'local' but missing 'path'")
 
-        if entry_type == "git" and not entry.get("repo"):
-            errors.append(f"{label} is type 'git' but missing 'repo'")
+        reuses_checkout = "reuse_checkout" in entry
 
-        if entry_type == "git" and not entry.get("ref"):
-            errors.append(f"{label} is type 'git' but missing 'ref'")
+        if entry_type == "git" and not reuses_checkout:
+            if not entry.get("repo"):
+                errors.append(f"{label} is type 'git' but missing 'repo'")
+            if not entry.get("ref"):
+                errors.append(f"{label} is type 'git' but missing 'ref'")
+
+        if reuses_checkout:
+            reuse = entry["reuse_checkout"]
+            if entry_type != "git":
+                errors.append(
+                    f"{label} has 'reuse_checkout' but is not type 'git'"
+                )
+            elif not isinstance(reuse, str) or not reuse:
+                errors.append(
+                    f"{label} 'reuse_checkout' must be a non-empty string"
+                )
+            else:
+                for field in ("repo", "ref"):
+                    if field in entry:
+                        errors.append(
+                            f"{label} has 'reuse_checkout' and '{field}' "
+                            "(the checkout is shared, so it comes from the "
+                            "named source)"
+                        )
+                if reuse not in earlier_clones:
+                    errors.append(
+                        f"{label} 'reuse_checkout' names '{reuse}', which is "
+                        "not an earlier 'git' source that clones its own repo"
+                    )
 
         if entry_type == "archive":
             if not entry.get("url"):
@@ -231,7 +261,8 @@ def validate_sources(config):
             disallowed_for_archive = (
                 "targets", "docc_catalog", "path", "repo", "ref",
                 "preflight", "add_docc_plugin", "extra_flags", "env",
-                "strip_linux_availability",
+                "strip_linux_availability", "additional_symbol_graph_dir",
+                "reuse_checkout",
             )
             for field in disallowed_for_archive:
                 if field in entry:
@@ -269,11 +300,27 @@ def validate_sources(config):
                     f"(got {type(entry['strip_linux_availability']).__name__})"
                 )
 
+            if "additional_symbol_graph_dir" in entry:
+                value = entry["additional_symbol_graph_dir"]
+                if not isinstance(value, str) or not value:
+                    errors.append(
+                        f"{label} 'additional_symbol_graph_dir' must be a "
+                        "non-empty string"
+                    )
+                if has_targets:
+                    errors.append(
+                        f"{label} has 'additional_symbol_graph_dir' but also "
+                        "'targets' (only allowed alongside 'docc_catalog')"
+                    )
+
         if entry.get("add_docc_plugin") and entry_type != "git":
             errors.append(f"{label} has 'add_docc_plugin' but is not type 'git'")
 
         if "preflight" in entry and not entry["preflight"]:
             errors.append(f"{label} has 'preflight' but it is empty")
+
+        if entry_type == "git" and entry_id and not reuses_checkout:
+            earlier_clones.add(entry_id)
 
         if "env" in entry:
             env_val = entry["env"]
@@ -358,35 +405,17 @@ def clone_or_update(source, workspace, ref):
 
     if (source_dir / ".git").is_dir():
         print(f"Updating existing clone (ref: {ref})...")
+        git = ["git", "-C", str(source_dir)]
+        subprocess.run([*git, "fetch", "--quiet", "origin", ref], check=True)
+        # Discard edits and untracked files left by previous builds (the
+        # docc plugin edit to Package.swift, swift-book's generated
+        # SummaryOfTheGrammar.md) *before* switching refs: a dirty tree makes
+        # the checkout abort, and stale output trips preflight scripts.
+        subprocess.run([*git, "reset", "--quiet", "--hard"], check=True)
+        subprocess.run([*git, "clean", "--quiet", "-fdx"], check=True)
+        # Detach at what was fetched, so branches and tags take one path.
         subprocess.run(
-            ["git", "-C", str(source_dir), "fetch", "--quiet", "origin", ref],
-            check=True,
-        )
-        # Try checking out the ref; if it's a new branch, create a tracking branch
-        result = subprocess.run(
-            ["git", "-C", str(source_dir), "checkout", "--quiet", ref],
-            capture_output=True,
-        )
-        if result.returncode != 0:
-            subprocess.run(
-                [
-                    "git", "-C", str(source_dir), "checkout", "--quiet",
-                    "-b", ref, f"origin/{ref}",
-                ],
-                check=True,
-            )
-        subprocess.run(
-            [
-                "git", "-C", str(source_dir), "reset", "--quiet", "--hard",
-                f"origin/{ref}",
-            ],
-            check=True,
-        )
-        # Remove untracked files left by previous builds (e.g. swift-book's
-        # generated SummaryOfTheGrammar.md) so preflight scripts don't fail
-        # when they detect stale output from a cached workspace.
-        subprocess.run(
-            ["git", "-C", str(source_dir), "clean", "--quiet", "-fdx"],
+            [*git, "checkout", "--quiet", "--force", "--detach", "FETCH_HEAD"],
             check=True,
         )
     else:
@@ -694,13 +723,44 @@ def _build_docc_catalog(source, source_dir, common_dir, temp_archive_dir, docc_c
     if dest.exists():
         shutil.rmtree(str(dest))
 
+    symbol_graph_flags = []
+    additional_symbol_graph_dir = source.get("additional_symbol_graph_dir")
+    if additional_symbol_graph_dir:
+        graph_dir = source_dir / additional_symbol_graph_dir
+        if not graph_dir.is_dir() or not any(graph_dir.iterdir()):
+            raise RuntimeError(
+                f"'additional_symbol_graph_dir' '{graph_dir}' is missing or "
+                "empty (did the source's preflight generate the symbol graphs?)"
+            )
+        symbol_graph_flags = [
+            "--additional-symbol-graph-dir",
+            str(graph_dir),
+        ]
+
     print("Converting catalog with docc convert...")
     cmd = docc_cmd + [
         "convert", str(catalog_path),
         "--output-path", str(dest),
-    ] + DOCC_BUILD_FLAGS + extra_flags
+    ] + DOCC_BUILD_FLAGS + symbol_graph_flags + extra_flags
     subprocess.run(cmd, check=True, env=env)
     return [dest]
+
+
+def _configured_ref(source, sources):
+    """The sources.json ref for a git source, following `reuse_checkout`.
+
+    Returns None for non-git sources, and for a reusing source when `sources`
+    is unavailable (the ref is then read from the working tree).
+    """
+    if source["type"] != "git":
+        return None
+    reused_id = source.get("reuse_checkout")
+    if not reused_id:
+        return source["ref"]
+    for candidate in sources or []:
+        if candidate["id"] == reused_id:
+            return candidate["ref"]
+    return None
 
 
 def _collect_git_metadata(source_dir, configured_ref=None):
@@ -735,12 +795,15 @@ def _collect_git_metadata(source_dir, configured_ref=None):
         return "unknown", "unknown"
 
 
-def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc_cmd, env, swift_cmd=None):
+def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc_cmd, env, swift_cmd=None, sources=None):
     """Build a single source entry.
 
     Returns (archives, manifest_entry) on success. Dispatches to a helper for
     each source type; archive sources short-circuit before any toolchain or
     preflight setup.
+
+    `sources` is the full list from sources.json. It is only needed to resolve
+    the configured ref of a `reuse_checkout` target.
     """
     if swift_cmd is None:
         swift_cmd = ["swift"]
@@ -764,6 +827,15 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
         source_dir = root_dir / source["path"]
         if not source_dir.is_dir():
             raise RuntimeError(f"local path '{source_dir}' does not exist")
+    elif source_type == "git" and source.get("reuse_checkout"):
+        reused_id = source["reuse_checkout"]
+        source_dir = workspace / reused_id
+        if not (source_dir / ".git").is_dir():
+            raise RuntimeError(
+                f"'reuse_checkout' names '{reused_id}', but its checkout "
+                f"'{source_dir}' does not exist (build '{reused_id}' first)"
+            )
+        print(f"Reusing checkout of '{reused_id}'")
     elif source_type == "git":
         source_dir = clone_or_update(source, workspace, source["ref"])
     else:
@@ -779,9 +851,12 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
     preflight = source.get("preflight", "")
     if preflight:
         print(f"Running preflight: {preflight}")
+        # DOCS_ROOT lets a preflight reach helper scripts in this repo, since
+        # its working directory is the source's checkout.
         subprocess.run(
             ["bash", "-c", preflight],
-            cwd=str(source_dir), check=True, env=env,
+            cwd=str(source_dir), check=True,
+            env={**env, "DOCS_ROOT": str(root_dir)},
         )
 
     if source.get("add_docc_plugin"):
@@ -805,7 +880,7 @@ def build_source(source, root_dir, workspace, common_dir, temp_archive_dir, docc
                 f"removed {removed} Linux platform entries"
             )
 
-    configured_ref = source["ref"] if source_type == "git" else None
+    configured_ref = _configured_ref(source, sources)
     actual_ref, commit_sha = _collect_git_metadata(source_dir, configured_ref)
 
     manifest_entry = {
@@ -1185,6 +1260,7 @@ def main():
                 source, root_dir, workspace, common_dir,
                 temp_archive_dir, tools.docc, env,
                 swift_cmd=tools.swift,
+                sources=sources,
             )
         except fatal as e:
             print(f"Fatal: {e}")
