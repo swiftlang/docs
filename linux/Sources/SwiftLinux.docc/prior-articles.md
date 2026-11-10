@@ -9,7 +9,6 @@ documentation. Each link below goes to the existing page until its content
 migrates into this catalog.
 
 - [Swift on Server Guides](https://www.swift.org/documentation/server/guides/index.html) — Index of guides for building, testing, deploying, and debugging server applications.
-- [Testing](https://www.swift.org/documentation/server/guides/testing.html)
 - [Optimizing Allocations](https://www.swift.org/documentation/server/guides/allocations.html)
 - [Linux perf](https://www.swift.org/documentation/server/guides/linux-perf.html)
 - [LLVM TSAN / ASAN](https://www.swift.org/documentation/server/guides/llvm-sanitizers.html) — Debugging multithreading issues and memory checks.
