@@ -23,11 +23,7 @@ If you're using Xcode, select your target and open the Build Settings tab. Searc
 
 This example creates a C++ class called `Error`. Because Swift already has its own `Error`, rename it to `CxxErrorExample` as it crosses into Swift, and expose it through a module named `ErrorLib`. 
 
-If you're using Swift Package Manager, put `Error.hpp` in your C++ target's public-headers directory, `Sources/ErrorLib/include/`, and `Error.cpp` in `Sources/ErrorLib/`. If you're building from the command line, create `Error.hpp` and `Error.cpp` in your project directory. And in Xcode:
-
-1. Add a C++ file with File > New > File from Template… 
-2. Select "Also create a header file" if the template doesn't make one. 
-3. Add the file to your app target. If Xcode offers to create a bridging header, decline it.
+If you're using Swift Package Manager, put `Error.hpp` in your C++ target's public-headers directory, `Sources/ErrorLib/include/`, and `Error.cpp` in `Sources/ErrorLib/`. If you're building from the command line, create `Error.hpp` and `Error.cpp` in your project directory. In Xcode, create a new C++ file in your app target, along with its header. Xcode's file template can create both at once if you turn on that option, or you can add the header afterward if you skip it. If Xcode offers to create a bridging header, decline it.
 
 > Note: The example in this article uses a module map instead of a bridging header. If a bridging header already exists, or you create one by accident, retain it. Deleting the file makes the build fail because Xcode looks for the bridging header after you remove it.
 

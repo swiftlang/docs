@@ -2,10 +2,6 @@
 
 Create a Swift package target from a C or C++ source library to import it into Swift.
 
-@Options(scope: local) {
-    @AutomaticSeeAlso(disabled)
-}
-
 ## Overview
 
 Swift provides built-in support for C and C++ code, letting you use existing libraries in ways that feel like native Swift code. The first steps to using C/C++ from your Swift code are to put the library in its own target of your Swift package, compile the library's sources, and generate a module for its public header. After you have a module for the C/C++ library, you can import it from Swift.
@@ -50,7 +46,7 @@ int add(int a, int b) { return a + b; }
 `my-lib` also ships a standalone test file, `tests/test.c`, which shouldn't be compiled into the Swift target.
 
 The full library looks like this:
-```
+```nocopy
 my-lib
 ├── src
 │   ├── addition.c
@@ -62,7 +58,7 @@ my-lib
 
 Create a `CMyLib` folder in the `Sources` directory of your Swift package and add the C library.
 
-```
+```nocopy
 MyApp
 ├── Package.swift
 └── Sources
@@ -105,7 +101,7 @@ Add public header files for `my-lib` to the `include` directory and create `CMyL
 ```
 
 Your file structure now looks like this:
-```
+```nocopy
 MyApp
 ├── Package.swift
 └── Sources
@@ -127,13 +123,13 @@ For more information on module map generation, see [Creating Module Maps](https:
 
 ### Import the library from Swift
 
-Import the module by the target's name. Everything declared in the public header is available in Swift code.
+Import the module by the target's name. Everything declared in the public header is available in Swift code. You can call `language()` and `add()` directly, without qualifying them by the module's name, because Swift imports any function declared in a C header as a Swift global function.
 
 ```swift
 // Sources/MyApp/MyApp.swift
 import CMyLib
 
-print(String(cString: CMyLib.language()), CMyLib.add(1, 2))
+print(String(cString: language()), add(1, 2))
 ```
 
 Build and run the package. The program prints the constant and the value the C library calculates:
@@ -208,7 +204,7 @@ Turn on C++ interoperability for the Swift target that imports the library by ad
 
 > Note: Configure build settings for a C++ library using the `cxxSettings` target property. Set the package property `cxxLanguageStandard` to define the C++ language standard to use for all C++ targets in this package.
 
-Import the C++ module using the target's name and use the C++ namespace the library defines.
+Import the C++ module using the target's name and use the C++ namespace the library defines. Unlike the C library's functions, `cxxlib`'s members stay namespaced when imported by Swift.
 
 ```swift
 import CxxLib
