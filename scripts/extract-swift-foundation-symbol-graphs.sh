@@ -16,16 +16,12 @@
 # Builds swift-foundation and extracts symbol graphs for FoundationEssentials
 # and FoundationInternationalization into .build/symbols/<Module>.
 #
-# Run this from the root of a swift-foundation checkout. build_docs.py does
-# that for you: sources.json's swift-foundation-essentials entry names this
-# script as its `preflight`, and the swift-foundation-internationalization
-# entry reuses that checkout with `reuse_checkout`.
+# This script is meant to be run this from the root of a swift-foundation checkout.
 #
-# `swift package generate-documentation` currently crashes on swift-foundation,
-# so it can't use the plugin path every other package in sources.json uses. Instead, `docc_catalog` + `additional_symbol_graph_dir`
-# make build_docs.py run `docc convert` directly against the symbol graphs
-# this script produces, and fold the result into the combined archive like
-# any other source. Drop this script once the plugin works on swift-foundation.
+# `swift package generate-documentation` (as of 6.4.x) crashes on swift-foundation,
+# so it can't use the plugin path every other package in sources.json uses. 
+# It lets the combined docs build `docc_catalog` + `additional_symbol_graph_dir`
+# using `docc convert` to get to the same result without the crashing issue.
 
 set -e
 
@@ -40,24 +36,39 @@ set -e
 # without also pointing -I directly at .../icuSources/include/_foundation_unicode
 # (where its module.modulemap actually lives), Clang can't find the module at
 # all ("missing required module '_FoundationICU'").
+
 # Linux's toolchain image *does* ship its own copy at
 # /usr/lib/swift/_foundation_unicode/, found automatically regardless of our
 # -I flags; adding that same extra -I on Linux makes ICU's own vendored
 # _foundation_unicode/uchar.h reachable via the bare name `<uchar.h>`.
+
 # This shadows the real system C11 header _foundation_unicode/ptypes.h expects
 # for char16_t, producing "unknown type name 'U_CAPI'".
-if command -v xcrun >/dev/null 2>&1 && xcrun --find swift-symbolgraph-extract >/dev/null 2>&1; then
+# The extractor must come from the same toolchain as the `swift build` below.
+
+# A swiftmodule built by one compiler version fails to load in another's
+# extractor ("compiled module was created by a different version of the
+# compiler"), so prefer whatever `swift-symbolgraph-extract` is on PATH, which
+# should match how `swift` is identified. 
+if command -v swift-symbolgraph-extract >/dev/null 2>&1; then
+    SYMBOLGRAPH_EXTRACT="swift-symbolgraph-extract"
+elif command -v xcrun >/dev/null 2>&1 && xcrun --find swift-symbolgraph-extract >/dev/null 2>&1; then
     SYMBOLGRAPH_EXTRACT="xcrun swift-symbolgraph-extract"
+else
+    echo "error: swift-symbolgraph-extract not found" >&2
+    exit 1
+fi
+
+if command -v xcrun >/dev/null 2>&1 && xcrun --sdk macosx --show-sdk-path >/dev/null 2>&1; then
     SDK_FLAGS="-sdk $(xcrun --sdk macosx --show-sdk-path)"
     ICU_EXTRA_INCLUDE_FLAGS="-I .build/checkouts/swift-foundation-icu/icuSources/include/_foundation_unicode"
 else
-    SYMBOLGRAPH_EXTRACT="swift-symbolgraph-extract"
     SDK_FLAGS=""
     ICU_EXTRA_INCLUDE_FLAGS=""
 fi
 
 echo "Building swift-foundation..."
-# `swift build` is currently known to exit non-zero on Linux nightly
+# `swift build` is (swift 6.4.x) known to exit non-zero on Linux nightly
 # toolchains, failing at/near the very last build step with a bare
 # "error: Build failed" and no underlying compiler diagnostic anywhere in the
 # log — every other line is a warning. Despite that, both
@@ -92,5 +103,10 @@ $SYMBOLGRAPH_EXTRACT -pretty-print -module-name FoundationInternationalization \
     $ICU_EXTRA_INCLUDE_FLAGS \
     $SDK_FLAGS \
     -emit-extension-block-symbols
+
+# The extractor also emits `<Module>@_StringProcessing` graphs. They add a
+# stray `_stringprocessing` page to the docs, so drop them (the swift-foundation
+# docs builder does the same).
+rm -f .build/symbols/*/*@_StringProcessing.symbols.json
 
 echo "Done. Symbol graphs ready under $(pwd)/.build/symbols/"

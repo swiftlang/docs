@@ -29,8 +29,8 @@
     {
       "id": "swift-foundation-essentials",
       "type": "git",
-      "repo": "https://github.com/invalidname/swift-foundation.git",
-      "ref": "invalidname/docs-internationalization-curation-183033099",
+      "repo": "https://github.com/swiftlang/swift-foundation.git",
+      "ref": "release/6.4.x",
       "docc_catalog": "Sources/FoundationEssentials/FoundationEssentials.docc",
       "preflight": "bash \"$DOCS_ROOT/scripts/extract-swift-foundation-symbol-graphs.sh\"",
       "additional_symbol_graph_dir": ".build/symbols/FoundationEssentials"
