@@ -14,17 +14,26 @@
 ##===----------------------------------------------------------------------===##
 """Tests for build_docs.py.
 
-Run from the scripts/ directory (or repository root) with:
-    python3 -m unittest scripts/test_build_docs.py
+Most tests call functions directly. The "end-to-end" classes at the end of
+the file run the real build functions against temporary directories. They
+replace `swift` and `docc` with small shell scripts that write the files the
+real tools would write, and they do not patch `build_docs` internals.
+
+Run from the repository root with:
+    python3 -m unittest discover -s scripts -p 'test_*.py'
 """
 
+import gzip
 import json
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -735,60 +744,6 @@ class BuildSourceArchiveBranch(unittest.TestCase):
             self.assertIn("platforms", payload["metadata"])
 
 
-class BuildSourceGitBranchStripLinuxAvailability(unittest.TestCase):
-    def _build(self, tmp_path, archive, strip_linux_availability):
-        source_dir = tmp_path / "checkout"
-        source_dir.mkdir()
-        source = {
-            "id": "swift-testing",
-            "type": "git",
-            "repo": "https://github.com/swiftlang/swift-testing.git",
-            "ref": "main",
-            "targets": ["Testing"],
-        }
-        if strip_linux_availability is not None:
-            source["strip_linux_availability"] = strip_linux_availability
-
-        with mock.patch("build_docs.clone_or_update", return_value=source_dir), \
-                mock.patch("build_docs._build_package_targets", return_value=[archive]):
-            return build_docs.build_source(
-                source,
-                root_dir=tmp_path,
-                workspace=tmp_path / "workspace",
-                common_dir=tmp_path,
-                temp_archive_dir=tmp_path / "_archives",
-                docc_cmd=[],
-                env={},
-            )
-
-    def test_strips_only_linux_entries_from_built_archive(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = _make_archive_with_linux_platform(tmp_path, "Testing.doccarchive")
-
-            archives, _ = self._build(tmp_path, archive, True)
-
-            payload = json.loads(
-                (archives[0] / "data" / "documentation" / "foosymbol.json").read_text()
-            )
-            platform_names = {p["name"] for p in payload["metadata"]["platforms"]}
-            self.assertNotIn("Linux", platform_names)
-            self.assertEqual(platform_names, {"Swift", "Xcode"})
-
-    def test_absent_leaves_linux_entry(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = _make_archive_with_linux_platform(tmp_path, "Testing.doccarchive")
-
-            archives, _ = self._build(tmp_path, archive, None)
-
-            payload = json.loads(
-                (archives[0] / "data" / "documentation" / "foosymbol.json").read_text()
-            )
-            platform_names = {p["name"] for p in payload["metadata"]["platforms"]}
-            self.assertIn("Linux", platform_names)
-
-
 def _make_archive_with_platforms(root, archive_name="Swift.doccarchive"):
     """Build a minimal .doccarchive tree on disk with platforms data sprinkled in.
 
@@ -827,54 +782,6 @@ def _make_archive_with_platforms(root, archive_name="Swift.doccarchive"):
     (data_dir / "article.json").write_text(json.dumps(article))
 
     return archive
-
-
-class BuildDoccCatalogAdditionalSymbolGraphDir(unittest.TestCase):
-    def _build(self, tmp_path, additional_symbol_graph_dir=None):
-        common = tmp_path / "common"
-        common.mkdir()
-        (common / "header.html").write_text("HDR")
-        (common / "footer.html").write_text("FTR")
-        (common / "favicon.ico").write_bytes(b"ICO")
-
-        source_dir = tmp_path / "checkout"
-        catalog = source_dir / "Foo.docc"
-        catalog.mkdir(parents=True)
-
-        source = {
-            "id": "foo",
-            "docc_catalog": "Foo.docc",
-        }
-        if additional_symbol_graph_dir is not None:
-            source["additional_symbol_graph_dir"] = additional_symbol_graph_dir
-            graph_dir = source_dir / additional_symbol_graph_dir
-            graph_dir.mkdir(parents=True)
-            (graph_dir / "Foo.symbols.json").write_text("{}")
-
-        temp_archive_dir = tmp_path / "_archives"
-        temp_archive_dir.mkdir()
-
-        with mock.patch("build_docs.subprocess.run") as mock_run:
-            build_docs._build_docc_catalog(
-                source, source_dir, common, temp_archive_dir,
-                docc_cmd=["docc"], env={},
-            )
-        return mock_run.call_args.args[0]
-
-    def test_appends_flag_when_present(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            cmd = self._build(tmp_path, additional_symbol_graph_dir=".build/symbols/Foo")
-            self.assertIn("--additional-symbol-graph-dir", cmd)
-            idx = cmd.index("--additional-symbol-graph-dir")
-            expected = str(tmp_path / "checkout" / ".build/symbols/Foo")
-            self.assertEqual(cmd[idx + 1], expected)
-
-    def test_omits_flag_when_absent(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            cmd = self._build(tmp_path)
-            self.assertNotIn("--additional-symbol-graph-dir", cmd)
 
 
 class StripArchive(unittest.TestCase):
@@ -1469,53 +1376,6 @@ class SuppressEyebrowsArchive(unittest.TestCase):
 
 
 class TransformStaticHosting(unittest.TestCase):
-    def test_invokes_docc_with_correct_args_and_replaces_in_place(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp) / "main.doccarchive"
-            archive.mkdir()
-            (archive / "index.html").write_text("ORIGINAL")
-
-            captured = {}
-
-            def fake_run(cmd, check, **kw):
-                captured["cmd"] = cmd
-                # Simulate docc producing the transformed archive at --output-path.
-                idx = cmd.index("--output-path") + 1
-                out_path = Path(cmd[idx])
-                out_path.mkdir(parents=True, exist_ok=True)
-                (out_path / "index.html").write_text("TRANSFORMED")
-                return subprocess.CompletedProcess(cmd, 0)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                build_docs.transform_static_hosting(archive, "main", ["docc"])
-
-            self.assertEqual(
-                captured["cmd"][:3],
-                ["docc", "process-archive", "transform-for-static-hosting"],
-            )
-            self.assertIn("--hosting-base-path", captured["cmd"])
-            hbp_idx = captured["cmd"].index("--hosting-base-path") + 1
-            self.assertEqual(captured["cmd"][hbp_idx], "main")
-            # Archive replaced in place.
-            self.assertTrue(archive.is_dir())
-            self.assertEqual((archive / "index.html").read_text(), "TRANSFORMED")
-
-    def test_failure_leaves_original_archive_untouched(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp) / "main.doccarchive"
-            archive.mkdir()
-            (archive / "index.html").write_text("ORIGINAL")
-
-            def fake_run(cmd, check, **kw):
-                raise subprocess.CalledProcessError(1, cmd)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                with self.assertRaises(subprocess.CalledProcessError):
-                    build_docs.transform_static_hosting(archive, "main", ["docc"])
-
-            self.assertTrue(archive.is_dir())
-            self.assertEqual((archive / "index.html").read_text(), "ORIGINAL")
-
     def test_raises_when_docc_cmd_empty(self):
         with tempfile.TemporaryDirectory() as tmp:
             archive = Path(tmp) / "main.doccarchive"
@@ -1796,48 +1656,6 @@ class AddDoccPlugin(unittest.TestCase):
                     build_docs.add_docc_plugin(source_dir, ["swift"])
 
 
-class MergeArchives(unittest.TestCase):
-    def _capture_merge_cmd(self, version):
-        """Run merge_archives with a stubbed subprocess and return the cmd."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-            output = tmp_path / version
-            captured = {}
-
-            def fake_run(cmd, **kw):
-                captured["cmd"] = cmd
-                return subprocess.CompletedProcess(cmd, 0)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                build_docs.merge_archives(
-                    [archive], output, ["docc"],
-                    landing_page_name="Swift Documentation",
-                )
-            return captured["cmd"]
-
-    def test_passes_landing_page_name_and_list_style(self):
-        cmd = self._capture_merge_cmd("6.2")
-
-        self.assertIn("--synthesized-landing-page-name", cmd)
-        name_idx = cmd.index("--synthesized-landing-page-name") + 1
-        self.assertEqual(cmd[name_idx], "Swift Documentation")
-
-        self.assertIn("--synthesized-landing-page-topics-style", cmd)
-        style_idx = cmd.index("--synthesized-landing-page-topics-style") + 1
-        self.assertEqual(cmd[style_idx], "list")
-
-        self.assertIn("--synthesized-landing-page-kind", cmd)
-        kind_idx = cmd.index("--synthesized-landing-page-kind") + 1
-        self.assertEqual(cmd[kind_idx], "Project")
-
-    def test_landing_page_name_is_version_independent(self):
-        cmd_main = self._capture_merge_cmd("main")
-        name_idx_main = cmd_main.index("--synthesized-landing-page-name") + 1
-        self.assertEqual(cmd_main[name_idx_main], "Swift Documentation")
-
-
 class FinalizeCombinedArchive(unittest.TestCase):
     def test_prior_failures_skip_merge(self):
         succeeded, failed = build_docs._finalize_combined_archive(
@@ -1862,342 +1680,6 @@ class FinalizeCombinedArchive(unittest.TestCase):
             )
         self.assertEqual(succeeded, [])
         self.assertEqual(failed, ["combined-merge"])
-
-    def test_merge_failure_records_combined_merge_only(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-
-            def fake_run(cmd, **kw):
-                raise subprocess.CalledProcessError(1, cmd)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                succeeded, failed = build_docs._finalize_combined_archive(
-                    [archive], tmp_path, "main", ["docc"], prior_failed=[]
-                )
-        self.assertEqual(succeeded, [])
-        self.assertEqual(failed, ["combined-merge"])
-
-    def test_transform_failure_records_only_transform(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-            (archive / "index.html").write_text("ok")
-
-            calls = []
-
-            def fake_run(cmd, **kw):
-                calls.append(cmd)
-                # First call is `docc merge`; succeed by creating output dir.
-                if "merge" in cmd:
-                    out_idx = cmd.index("--output-path") + 1
-                    out = Path(cmd[out_idx])
-                    (out / "data").mkdir(parents=True, exist_ok=True)
-                    return subprocess.CompletedProcess(cmd, 0)
-                # Second call is the transform; fail.
-                raise subprocess.CalledProcessError(1, cmd)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                succeeded, failed = build_docs._finalize_combined_archive(
-                    [archive], tmp_path, "main", ["docc"], prior_failed=[]
-                )
-        self.assertEqual(
-            succeeded,
-            ["combined-merge", "eyebrow-suppression", "language-toggle-suppression"],
-        )
-        self.assertEqual(failed, ["static-hosting-transform"])
-
-    def test_merge_uses_fixed_landing_page_name_regardless_of_version(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-
-            calls = []
-
-            def fake_run(cmd, **kw):
-                calls.append(cmd)
-                out_idx = cmd.index("--output-path") + 1
-                Path(cmd[out_idx]).mkdir(parents=True, exist_ok=True)
-                raise subprocess.CalledProcessError(1, cmd)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                build_docs._finalize_combined_archive(
-                    [archive], tmp_path, "6.2", ["docc"], prior_failed=[]
-                )
-
-            merge_cmd = calls[0]
-            name_idx = merge_cmd.index("--synthesized-landing-page-name") + 1
-            self.assertEqual(merge_cmd[name_idx], "Swift Documentation")
-
-    def test_full_success_records_all_steps(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-            (archive / "index.html").write_text("ok")
-
-            def fake_run(cmd, **kw):
-                if "merge" in cmd:
-                    out_idx = cmd.index("--output-path") + 1
-                    out = Path(cmd[out_idx])
-                    out.mkdir(parents=True, exist_ok=True)
-                    (out / "data").mkdir(parents=True, exist_ok=True)
-                    (out / "index.html").write_text("merged")
-                    return subprocess.CompletedProcess(cmd, 0)
-                # Transform step: simulate docc producing the transformed
-                # archive at --output-path.
-                out_idx = cmd.index("--output-path") + 1
-                out = Path(cmd[out_idx])
-                out.mkdir(parents=True, exist_ok=True)
-                (out / "index.html").write_text("transformed")
-                return subprocess.CompletedProcess(cmd, 0)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                succeeded, failed = build_docs._finalize_combined_archive(
-                    [archive], tmp_path, "main", ["docc"], prior_failed=[]
-                )
-        self.assertEqual(
-            succeeded,
-            ["combined-merge", "eyebrow-suppression", "language-toggle-suppression",
-             "static-hosting-transform"],
-        )
-        self.assertEqual(failed, [])
-
-    def test_step_failure_records_only_that_step(self):
-        cases = [
-            ("strip_language_toggle_archive",
-             ["combined-merge", "eyebrow-suppression"],
-             ["language-toggle-suppression"]),
-            ("canonicalize_link_archive",
-             ["combined-merge", "eyebrow-suppression", "language-toggle-suppression",
-              "static-hosting-transform"],
-             ["canonical-link-injection"]),
-        ]
-        for mock_target, expected_succeeded, expected_failed in cases:
-            with self.subTest(mock_target=mock_target):
-                with tempfile.TemporaryDirectory() as tmp:
-                    tmp_path = Path(tmp)
-                    archive = tmp_path / "a.doccarchive"
-                    archive.mkdir()
-                    (archive / "index.html").write_text("ok")
-
-                    def fake_run(cmd, **kw):
-                        out_idx = cmd.index("--output-path") + 1
-                        out = Path(cmd[out_idx])
-                        out.mkdir(parents=True, exist_ok=True)
-                        (out / "index.html").write_text("stub")
-                        if "merge" in cmd:
-                            (out / "data").mkdir(parents=True, exist_ok=True)
-                        return subprocess.CompletedProcess(cmd, 0)
-
-                    with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                        with mock.patch.object(
-                            build_docs, mock_target, side_effect=OSError("boom"),
-                        ):
-                            succeeded, failed = build_docs._finalize_combined_archive(
-                                [archive], tmp_path, "main", ["docc"], prior_failed=[],
-                                canonical_base_url="https://docs.swift.org/latest",
-                            )
-                self.assertEqual(succeeded, expected_succeeded)
-                self.assertEqual(failed, expected_failed)
-
-    def test_canonical_base_url_omitted_skips_canonical_link_injection(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-            (archive / "index.html").write_text("ok")
-
-            def fake_run(cmd, **kw):
-                out_idx = cmd.index("--output-path") + 1
-                out = Path(cmd[out_idx])
-                out.mkdir(parents=True, exist_ok=True)
-                (out / "index.html").write_text("stub")
-                if "merge" in cmd:
-                    (out / "data").mkdir(parents=True, exist_ok=True)
-                return subprocess.CompletedProcess(cmd, 0)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                with mock.patch.object(
-                    build_docs, "canonicalize_link_archive"
-                ) as mock_canonicalize:
-                    succeeded, failed = build_docs._finalize_combined_archive(
-                        [archive], tmp_path, "main", ["docc"], prior_failed=[]
-                    )
-        mock_canonicalize.assert_not_called()
-        self.assertNotIn("canonical-link-injection", succeeded)
-        self.assertEqual(failed, [])
-
-    def test_canonical_base_url_given_runs_and_records_injection_step(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-            (archive / "index.html").write_text("ok")
-
-            def fake_run(cmd, **kw):
-                out_idx = cmd.index("--output-path") + 1
-                out = Path(cmd[out_idx])
-                out.mkdir(parents=True, exist_ok=True)
-                (out / "index.html").write_text(
-                    "<html><head><title>Documentation</title></head><body></body></html>"
-                )
-                if "merge" in cmd:
-                    (out / "data").mkdir(parents=True, exist_ok=True)
-                return subprocess.CompletedProcess(cmd, 0)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                succeeded, failed = build_docs._finalize_combined_archive(
-                    [archive], tmp_path, "main", ["docc"], prior_failed=[],
-                    canonical_base_url="https://docs.swift.org/latest",
-                )
-            self.assertEqual(
-                succeeded,
-                ["combined-merge", "eyebrow-suppression", "language-toggle-suppression",
-                 "static-hosting-transform", "canonical-link-injection"],
-            )
-            self.assertEqual(failed, [])
-            combined_output = tmp_path / "main"
-            self.assertNotEqual(
-                (combined_output / "index.html").read_text(),
-                "<html><head><title>Documentation</title></head><body></body></html>",
-                "canonical-link-injection step must actually modify the stub "
-                "(exact injected HTML shape is CanonicalizeArchive's concern)",
-            )
-
-    def _merge_writes_index(self, modules):
-        """Build a fake subprocess.run that writes a merged index.json on merge.
-
-        `modules` is a list of (title, path); merge writes them as the
-        synthesized root's children. The transform step succeeds by producing
-        an output archive at --output-path.
-        """
-        def fake_run(cmd, **kw):
-            out_idx = cmd.index("--output-path") + 1
-            out = Path(cmd[out_idx])
-            out.mkdir(parents=True, exist_ok=True)
-            if "merge" in cmd:
-                (out / "index").mkdir(parents=True, exist_ok=True)
-                (out / "data").mkdir(parents=True, exist_ok=True)
-                doc = {
-                    "schemaVersion": {"major": 0, "minor": 1, "patch": 2},
-                    "interfaceLanguages": {
-                        "swift": [{
-                            "title": "Swift Documentation",
-                            "children": [
-                                {"type": "module", "title": t, "path": p}
-                                for t, p in modules
-                            ],
-                            "path": "/documentation",
-                            "type": "module",
-                        }]
-                    },
-                }
-                (out / "index" / "index.json").write_text(json.dumps(doc) + "\n")
-            else:
-                (out / "index.html").write_text("transformed")
-            return subprocess.CompletedProcess(cmd, 0)
-        return fake_run
-
-    def test_curation_failure_records_navigator_curation(self):
-        nav = {
-            "version": 1,
-            "groups": [{"title": "Lang", "modules": [
-                {"source": "a", "path": "/documentation/swift"},
-            ]}],
-            "hidden": [],
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-            # Index has an extra module the manifest neither groups nor hides.
-            fake_run = self._merge_writes_index([
-                ("Swift", "/documentation/swift"),
-                ("Extra", "/documentation/extra"),
-            ])
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                succeeded, failed = build_docs._finalize_combined_archive(
-                    [archive], tmp_path, "main", ["docc"], prior_failed=[],
-                    navigation=nav,
-                )
-        self.assertEqual(succeeded, ["combined-merge"])
-        self.assertEqual(failed, ["navigator-curation"])
-
-    def test_curation_success_records_navigator_curation(self):
-        nav = {
-            "version": 1,
-            "groups": [{"title": "Lang", "modules": [
-                {"source": "a", "path": "/documentation/swift"},
-            ]}],
-            "hidden": [],
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-            fake_run = self._merge_writes_index([("Swift", "/documentation/swift")])
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                succeeded, failed = build_docs._finalize_combined_archive(
-                    [archive], tmp_path, "main", ["docc"], prior_failed=[],
-                    navigation=nav,
-                )
-        self.assertEqual(
-            succeeded,
-            ["combined-merge", "navigator-curation", "eyebrow-suppression",
-             "language-toggle-suppression", "static-hosting-transform"],
-        )
-        self.assertEqual(failed, [])
-
-    def test_favicon_survives_static_hosting_transform(self):
-        """Reproduces docc process-archive transform-for-static-hosting
-        overwriting favicon.ico/favicon.svg with its own bundled defaults,
-        and verifies build_docs.py restores the shared ones afterward."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            common_dir = tmp_path / "common"
-            common_dir.mkdir()
-            (common_dir / "favicon.ico").write_bytes(b"SWIFT-FAVICON")
-            (common_dir / "favicon.svg").write_bytes(b"SWIFT-FAVICON-SVG")
-            (common_dir / "header.html").write_text("HDR")
-            (common_dir / "footer.html").write_text("FTR")
-            archive = tmp_path / "a.doccarchive"
-            archive.mkdir()
-            (archive / "index.html").write_text("ok")
-
-            def fake_run(cmd, **kw):
-                out_idx = cmd.index("--output-path") + 1
-                out = Path(cmd[out_idx])
-                out.mkdir(parents=True, exist_ok=True)
-                (out / "index.html").write_text("stub")
-                if "merge" in cmd:
-                    (out / "data").mkdir(parents=True, exist_ok=True)
-                    (out / "favicon.ico").write_bytes(b"SWIFT-FAVICON")
-                    (out / "favicon.svg").write_bytes(b"DOCC-DEFAULT-GLOBE-SVG")
-                else:
-                    # Simulate transform-for-static-hosting clobbering the
-                    # favicons with DocC's own bundled defaults.
-                    (out / "favicon.ico").write_bytes(b"DOCC-DEFAULT-GLOBE")
-                    (out / "favicon.svg").write_bytes(b"DOCC-DEFAULT-GLOBE-SVG")
-                return subprocess.CompletedProcess(cmd, 0)
-
-            with mock.patch.object(build_docs.subprocess, "run", side_effect=fake_run):
-                succeeded, failed = build_docs._finalize_combined_archive(
-                    [archive], tmp_path, "main", ["docc"], prior_failed=[],
-                    common_dir=common_dir,
-                )
-            self.assertEqual(failed, [])
-            combined_output = tmp_path / "main"
-            self.assertEqual(
-                (combined_output / "favicon.ico").read_bytes(), b"SWIFT-FAVICON"
-            )
-            self.assertEqual(
-                (combined_output / "favicon.svg").read_bytes(), b"SWIFT-FAVICON-SVG"
-            )
-
 
 class RenderCommonTemplate(unittest.TestCase):
     def test_substitutes_copyright_year_placeholder(self):
@@ -3771,111 +3253,6 @@ class ValidateReuseCheckout(unittest.TestCase):
         self.assertIn("ref", output)
 
 
-def _make_git_checkout(path):
-    path.mkdir(parents=True)
-    _git(path, "init", "--quiet", "-b", "main")
-    _git(path, "commit", "--quiet", "--allow-empty", "-m", "init")
-    return _git(path, "rev-parse", "HEAD")
-
-
-class BuildSourceReuseCheckout(unittest.TestCase):
-    def _build(self, tmp_path, source, sources=None, **patches):
-        with mock.patch("build_docs.clone_or_update") as clone, \
-                mock.patch(
-                    "build_docs._build_docc_catalog", return_value=[]
-                ) as catalog:
-            result = build_docs.build_source(
-                source,
-                root_dir=tmp_path,
-                workspace=tmp_path / "workspace",
-                common_dir=tmp_path,
-                temp_archive_dir=tmp_path / "_archives",
-                docc_cmd=[],
-                env={},
-                sources=sources,
-            )
-        return result, clone, catalog
-
-    def test_uses_the_named_sources_checkout_without_cloning(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            commit = _make_git_checkout(tmp_path / "workspace" / "swift-foundation-essentials")
-            sources = [_git_source(ref="release/6.4.x"), _reusing_source()]
-
-            (_, entry), clone, catalog = self._build(tmp_path, sources[1], sources)
-
-            clone.assert_not_called()
-            used_dir = catalog.call_args.args[1]
-            self.assertEqual(
-                used_dir, tmp_path / "workspace" / "swift-foundation-essentials"
-            )
-            self.assertEqual(entry["id"], "swift-foundation-internationalization")
-            self.assertEqual(entry["type"], "git")
-            self.assertEqual(entry["ref"], "release/6.4.x")
-            self.assertEqual(entry["commit"], commit)
-
-    def test_missing_checkout_names_the_source_to_build_first(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            sources = [_git_source(), _reusing_source()]
-            with self.assertRaises(RuntimeError) as ctx:
-                self._build(tmp_path, sources[1], sources)
-            self.assertIn("swift-foundation-essentials", str(ctx.exception))
-
-
-class BuildSourcePreflightEnv(unittest.TestCase):
-    def test_preflight_sees_docs_root(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            source_dir = tmp_path / "checkout"
-            source_dir.mkdir()
-            out = tmp_path / "out.txt"
-            source = _git_source(preflight=f'printf %s "$DOCS_ROOT" > {out}')
-            with mock.patch("build_docs.clone_or_update", return_value=source_dir), \
-                    mock.patch("build_docs._build_docc_catalog", return_value=[]):
-                build_docs.build_source(
-                    source,
-                    root_dir=tmp_path,
-                    workspace=tmp_path / "workspace",
-                    common_dir=tmp_path,
-                    temp_archive_dir=tmp_path / "_archives",
-                    docc_cmd=[],
-                    env={},
-                )
-            self.assertEqual(out.read_text(), str(tmp_path))
-
-
-class BuildDoccCatalogSymbolGraphDir(unittest.TestCase):
-    def _convert(self, tmp_path, graph_dir_setup):
-        source_dir = tmp_path / "checkout"
-        (source_dir / "A.docc").mkdir(parents=True)
-        graph_dir_setup(source_dir / "graphs")
-        source = {
-            "id": "a",
-            "type": "git",
-            "docc_catalog": "A.docc",
-            "additional_symbol_graph_dir": "graphs",
-        }
-        with mock.patch("build_docs.install_templates"), \
-                mock.patch("build_docs.subprocess.run") as run:
-            build_docs._build_docc_catalog(
-                source, source_dir, tmp_path, tmp_path / "_archives",
-                ["docc"], {},
-            )
-        return run
-
-    def test_missing_directory_fails_before_running_docc(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(RuntimeError) as ctx:
-                self._convert(Path(tmp), lambda d: None)
-            self.assertIn("graphs", str(ctx.exception))
-
-    def test_empty_directory_fails_before_running_docc(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(RuntimeError):
-                self._convert(Path(tmp), lambda d: d.mkdir())
-
-
 def _git_env():
     """The environment for git commands that create commits in test repos.
 
@@ -3977,6 +3354,807 @@ class CloneOrUpdate(unittest.TestCase):
         _git(self.remote, "checkout", "--quiet", "main")
         self._sync("release")
         self.assertEqual(self._head(source_dir), rewritten)
+
+# ---------------------------------------------------------------------------
+# End-to-end tests: real build functions, temporary directories, and shell
+# scripts standing in for `swift` and `docc`.
+# ---------------------------------------------------------------------------
+
+SCRIPT = Path(__file__).resolve().parent / "build_docs.py"
+
+# A stand-in for `docc`. Every subcommand that takes `--output-path` creates
+# that directory with an empty `data/` folder and a stub `index.html`.
+# Behavior switches, set through the environment:
+#   FAKE_DOCC_LOG=<file>              append each invocation's arguments
+#   FAKE_DOCC_FAIL=1                  exit 1 on every call
+#   FAKE_DOCC_FAIL_ON=<subcommand>    exit 1 for that subcommand only
+#   FAKE_DOCC_NO_OUTPUT=1             exit 0 without writing anything
+#   FAKE_DOCC_MERGE_INDEX=<file>      `merge` writes this as index/index.json
+#   FAKE_DOCC_CLOBBER_FAVICONS=1      `process-archive` writes DocC's default
+#                                     favicons, as the real tool does
+#   FAKE_DOCC_COPY=<dir>              copy this directory into the output
+FAKE_DOCC = """#!/bin/bash
+sub="$1"
+[ -n "$FAKE_DOCC_LOG" ] && echo "$@" >> "$FAKE_DOCC_LOG"
+[ -n "$FAKE_DOCC_FAIL" ] && exit 1
+[ -n "$FAKE_DOCC_FAIL_ON" ] && [ "$FAKE_DOCC_FAIL_ON" = "$sub" ] && exit 1
+[ -n "$FAKE_DOCC_NO_OUTPUT" ] && exit 0
+out=""
+while [ $# -gt 0 ]; do
+    if [ "$1" = "--output-path" ]; then out="$2"; shift; fi
+    shift
+done
+mkdir -p "$out/data/documentation"
+[ -n "$FAKE_DOCC_COPY" ] && cp -R "$FAKE_DOCC_COPY/." "$out/"
+if [ "$sub" = "merge" ] && [ -n "$FAKE_DOCC_MERGE_INDEX" ]; then
+    mkdir -p "$out/index"
+    cp "$FAKE_DOCC_MERGE_INDEX" "$out/index/index.json"
+fi
+echo '<html><head><title>Documentation</title></head><body></body></html>' > "$out/index.html"
+if [ "$sub" = "process-archive" ] && [ -n "$FAKE_DOCC_CLOBBER_FAVICONS" ]; then
+    printf DOCC-DEFAULT > "$out/favicon.ico"
+    printf DOCC-DEFAULT-SVG > "$out/favicon.svg"
+fi
+"""
+
+# A stand-in for `swift`. `package describe` reports one target, `Lib`, whose
+# sources hold a `.docc` catalog. `package generate-documentation` writes a
+# `.doccarchive` for the requested target under `.build/`.
+FAKE_SWIFT = """#!/bin/bash
+if [ "$1" = "package" ] && [ "$2" = "describe" ]; then
+    echo '{"targets": [{"name": "Lib", "path": "Sources/Lib"}], "dependencies": []}'
+    exit 0
+fi
+if [ "$1" = "package" ] && [ "$2" = "generate-documentation" ]; then
+    target=""
+    while [ $# -gt 0 ]; do
+        if [ "$1" = "--target" ]; then target="$2"; shift; fi
+        shift
+    done
+    mkdir -p ".build/plugins/$target.doccarchive/data"
+    exit 0
+fi
+exit 1
+"""
+
+
+def _write_tool(directory, name, body):
+    path = Path(directory) / name
+    path.write_text(body)
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return path
+
+
+def _make_common_dir(root):
+    common = Path(root) / "common"
+    common.mkdir()
+    (common / "header.html").write_text("<header>{{COPYRIGHT_YEAR}}</header>")
+    (common / "footer.html").write_text("<footer></footer>")
+    (common / "favicon.ico").write_bytes(b"ico")
+    (common / "favicon.svg").write_text("<svg/>")
+    return common
+
+
+class TempDirTestCase(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        # Silence the build's progress output.
+        patcher = mock.patch("builtins.print")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def fake_docc(self):
+        return [str(_write_tool(self.tmp, "fake-docc", FAKE_DOCC))]
+
+    def env_with(self, **extra):
+        return mock.patch.dict(os.environ, extra)
+
+    def docc_calls(self, log):
+        """Return each logged docc invocation as a list of arguments."""
+        if not Path(log).exists():
+            return []
+        return [line.split() for line in Path(log).read_text().splitlines()]
+
+
+class ResolveCanonicalBaseUrlMalformed(unittest.TestCase):
+    def test_unparseable_url_warns_instead_of_raising(self):
+        with mock.patch("builtins.print") as printed:
+            result = build_docs._resolve_canonical_base_url(
+                {"canonical_base_url": "http://[bad"}
+            )
+        self.assertIsNone(result)
+        self.assertTrue(printed.called)
+
+
+class FetchArchiveTruncatedDownload(TempDirTestCase):
+    def test_truncated_gzip_raises_archive_fetch_error(self):
+        full = self.tmp / "full.tar.gz"
+        with gzip.open(full, "wb") as f:
+            f.write(b"x" * 100_000)
+        data = full.read_bytes()
+        (self.tmp / "bad.tar.gz").write_bytes(data[: len(data) // 2])
+        source = {
+            "id": "a",
+            "type": "archive",
+            "url": (self.tmp / "bad.tar.gz").as_uri(),
+            "docc_archive_name": "A.doccarchive",
+        }
+        with self.assertRaises(build_docs.ArchiveFetchError):
+            build_docs.fetch_archive(source, self.tmp / "ws")
+
+    def test_zip_archive_extracts(self):
+        zip_path = self.tmp / "a.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("top/A.doccarchive/index.html", "x")
+        source = {
+            "id": "a",
+            "type": "archive",
+            "url": zip_path.as_uri(),
+            "docc_archive_name": "A.doccarchive",
+            "format": "zip",
+        }
+        found = build_docs.fetch_archive(source, self.tmp / "ws")
+        self.assertEqual(found.name, "A.doccarchive")
+        self.assertTrue((found / "index.html").is_file())
+
+
+class TransformStaticHostingSafety(TempDirTestCase):
+    def _archive(self):
+        archive = self.tmp / "Combined.doccarchive"
+        (archive / "data").mkdir(parents=True)
+        (archive / "marker.txt").write_text("original")
+        return archive
+
+    def test_success_replaces_archive_in_place(self):
+        archive = self._archive()
+        build_docs.transform_static_hosting(archive, "main", self.fake_docc())
+        self.assertTrue(archive.is_dir())
+        self.assertFalse((archive / "marker.txt").exists())
+
+    def test_docc_exiting_zero_without_output_keeps_original(self):
+        archive = self._archive()
+        with self.env_with(FAKE_DOCC_NO_OUTPUT="1"):
+            with self.assertRaises(RuntimeError):
+                build_docs.transform_static_hosting(
+                    archive, "main", self.fake_docc()
+                )
+        self.assertEqual((archive / "marker.txt").read_text(), "original")
+
+    def test_docc_failure_keeps_original(self):
+        archive = self._archive()
+        with self.env_with(FAKE_DOCC_FAIL="1"):
+            with self.assertRaises(subprocess.CalledProcessError):
+                build_docs.transform_static_hosting(
+                    archive, "main", self.fake_docc()
+                )
+        self.assertEqual((archive / "marker.txt").read_text(), "original")
+
+
+class FinalizeCombinedArchiveRealSteps(TempDirTestCase):
+    """Drive _finalize_combined_archive with a fake docc and real post-steps."""
+
+    def _run(self, common_dir=None, **kwargs):
+        src = self.tmp / "src.doccarchive"
+        (src / "data").mkdir(parents=True)
+        out = self.tmp / "out"
+        out.mkdir()
+        return build_docs._finalize_combined_archive(
+            [src], out, "main", self.fake_docc(), [],
+            common_dir=common_dir, **kwargs,
+        )
+
+    def test_full_success_records_every_step(self):
+        common = _make_common_dir(self.tmp)
+        succeeded, failed = self._run(common_dir=common)
+        self.assertEqual(failed, [])
+        self.assertEqual(
+            succeeded,
+            [
+                "combined-merge",
+                "eyebrow-suppression",
+                "language-toggle-suppression",
+                "static-hosting-transform",
+            ],
+        )
+
+    def test_step_raising_value_error_is_recorded_not_raised(self):
+        # A merged archive without data/ makes the language-toggle step raise
+        # ValueError. A failing step must be recorded, not crash the build.
+        src = self.tmp / "src.doccarchive"
+        src.mkdir()
+        out = self.tmp / "out"
+        out.mkdir()
+        fake = _write_tool(
+            self.tmp, "docc-no-data",
+            '#!/bin/bash\nwhile [ $# -gt 0 ]; do '
+            '[ "$1" = "--output-path" ] && mkdir -p "$2"; shift; done\n',
+        )
+        succeeded, failed = build_docs._finalize_combined_archive(
+            [src], out, "main", [str(fake)], [],
+        )
+        self.assertEqual(succeeded, ["combined-merge", "eyebrow-suppression"])
+        self.assertEqual(failed, ["language-toggle-suppression"])
+
+    def test_missing_favicon_is_recorded_not_raised(self):
+        common = _make_common_dir(self.tmp)
+        (common / "favicon.svg").unlink()
+        succeeded, failed = self._run(common_dir=common)
+        self.assertEqual(failed, ["static-hosting-transform"])
+        self.assertNotIn("static-hosting-transform", succeeded)
+
+    def test_failed_step_stops_later_steps(self):
+        common = _make_common_dir(self.tmp)
+        (common / "favicon.svg").unlink()
+        succeeded, failed = self._run(
+            common_dir=common, canonical_base_url="https://example.com/x"
+        )
+        self.assertNotIn("canonical-link-injection", succeeded + failed)
+
+
+class ValidateSourcesStrictness(unittest.TestCase):
+    def _errors(self, *entries, **top):
+        config = {"version": {"slug": "main"}, "sources": list(entries)}
+        config.update(top)
+        return "\n".join(build_docs.validate_sources(config))
+
+    def local(self, **extra):
+        return {"id": "p", "type": "local", "path": "p", "targets": ["T"], **extra}
+
+    def git(self, **extra):
+        entry = {
+            "id": "g", "type": "git", "repo": "https://x/y.git", "ref": "main",
+            "docc_catalog": "C.docc",
+        }
+        entry.update(extra)
+        return entry
+
+    def test_empty_targets_rejected(self):
+        self.assertIn("targets", self._errors(self.local(targets=[])))
+
+    def test_targets_must_be_list_of_strings(self):
+        self.assertIn("targets", self._errors(self.local(targets="Foo")))
+        self.assertIn("targets", self._errors(self.local(targets=[1])))
+
+    def test_non_object_entry_is_an_error_not_a_crash(self):
+        self.assertIn("object", self._errors("not-an-object"))
+        self.assertIn("object", self._errors(None))
+
+    def test_non_string_archive_name_is_an_error_not_a_crash(self):
+        entry = {
+            "id": "a", "type": "archive", "url": "https://x/a.tar.gz",
+            "docc_archive_name": 5,
+        }
+        self.assertIn("docc_archive_name", self._errors(entry))
+
+    def test_duplicate_ids_rejected(self):
+        self.assertIn("duplicate", self._errors(self.local(), self.local()))
+
+    def test_unknown_field_rejected(self):
+        # A typo must not silently disable a feature.
+        out = self._errors(self.git(strip_linux_availabilty=True))
+        self.assertIn("strip_linux_availabilty", out)
+
+    def test_wrong_field_types_rejected(self):
+        for field, value in [
+            ("docc_catalog", 5),
+            ("extra_flags", "--x"),
+            ("preflight", 5),
+            ("ref", 5),
+            ("repo", 5),
+            ("add_docc_plugin", "yes"),
+        ]:
+            with self.subTest(field=field):
+                self.assertIn(field, self._errors(self.git(**{field: value})))
+
+    def test_non_string_id_rejected(self):
+        self.assertIn("id", self._errors(self.local(id=5)))
+
+    def test_local_source_rejects_git_only_fields(self):
+        self.assertIn("repo", self._errors(self.local(repo="https://x/y.git")))
+
+    def test_valid_configs_still_pass(self):
+        self.assertEqual(self._errors(self.local(), self.git()), "")
+
+    def test_real_sources_json_is_valid(self):
+        path = Path(__file__).resolve().parent / "sources.json"
+        config = json.loads(path.read_text())
+        self.assertEqual(build_docs.validate_sources(config), [])
+
+
+class BuildAllSources(unittest.TestCase):
+    """build_all_sources sorts failures by severity and keeps source order."""
+
+    def _sources(self):
+        return [
+            {"id": "git1", "type": "git"},
+            {"id": "arch", "type": "archive"},
+            {"id": "local1", "type": "local"},
+        ]
+
+    def test_archives_build_first_and_results_are_keyed_by_index(self):
+        order = []
+
+        def build(source):
+            order.append(source["id"])
+            return [Path(source["id"])], {"id": source["id"]}
+
+        succeeded, failed, results = build_docs.build_all_sources(
+            self._sources(), build
+        )
+        self.assertEqual(order[0], "arch")
+        self.assertEqual(sorted(results), [0, 1, 2])
+        self.assertEqual(failed, [])
+        self.assertCountEqual(succeeded, ["git1", "arch", "local1"])
+
+    def test_non_archive_failure_is_recorded_and_build_continues(self):
+        def build(source):
+            if source["id"] == "git1":
+                raise RuntimeError("boom")
+            return [Path(source["id"])], {"id": source["id"]}
+
+        succeeded, failed, results = build_docs.build_all_sources(
+            self._sources(), build
+        )
+        self.assertEqual(failed, ["git1"])
+        self.assertNotIn(0, results)
+        self.assertIn(2, results)
+
+    def test_archive_fetch_error_is_fatal(self):
+        built = []
+
+        def build(source):
+            built.append(source["id"])
+            if source["type"] == "archive":
+                raise build_docs.ArchiveFetchError("no network")
+            return [], {}
+
+        with mock.patch("builtins.print"):
+            with self.assertRaises(SystemExit) as ctx:
+                build_docs.build_all_sources(self._sources(), build)
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(built, ["arch"])
+
+    def test_other_archive_errors_are_fatal_too(self):
+        # An archive source that breaks for any reason must not be left to
+        # surface as a raw traceback.
+        def build(source):
+            if source["type"] == "archive":
+                raise OSError("disk full")
+            return [], {}
+
+        with mock.patch("builtins.print"):
+            with self.assertRaises(SystemExit):
+                build_docs.build_all_sources(self._sources(), build)
+
+    def test_only_builds_just_that_source(self):
+        built = []
+
+        def build(source):
+            built.append(source["id"])
+            return [], {"id": source["id"]}
+
+        build_docs.build_all_sources(self._sources(), build, only="local1")
+        self.assertEqual(built, ["local1"])
+
+
+@unittest.skipUnless(
+    shutil.which("swift") and shutil.which("git"),
+    "main() requires swift and git on PATH",
+)
+class MainCommandLine(unittest.TestCase):
+    def _run(self, *args):
+        with tempfile.TemporaryDirectory() as tmp:
+            return subprocess.run(
+                [sys.executable, str(SCRIPT),
+                 "--output-dir", str(Path(tmp) / "out"),
+                 "--workspace", str(Path(tmp) / "ws"), *args],
+                capture_output=True, text=True, timeout=120,
+            )
+
+    def test_unknown_only_id_exits_nonzero(self):
+        result = self._run("--only", "no-such-source")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no-such-source", result.stdout + result.stderr)
+
+
+class BuildPackageTargetsEndToEnd(TempDirTestCase):
+    def _package(self):
+        pkg = self.tmp / "pkg"
+        catalog = pkg / "Sources" / "Lib" / "Lib.docc"
+        catalog.mkdir(parents=True)
+        return pkg, catalog
+
+    def test_builds_target_and_installs_templates(self):
+        pkg, catalog = self._package()
+        common = _make_common_dir(self.tmp)
+        bin_dir = self.tmp / "bin"
+        bin_dir.mkdir()
+        _write_tool(bin_dir, "swift", FAKE_SWIFT)
+        staging = self.tmp / "staging"
+        staging.mkdir()
+        source = {"id": "pkg", "type": "local", "path": "pkg", "targets": ["Lib"]}
+        with self.env_with(PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}"):
+            archives = build_docs._build_package_targets(
+                source, pkg, common, staging, ["swift"], os.environ.copy()
+            )
+        self.assertEqual(archives, [staging / "pkg.doccarchive"])
+        self.assertTrue((staging / "pkg.doccarchive" / "data").is_dir())
+        self.assertTrue((catalog / "header.html").is_file())
+        self.assertTrue((catalog / "favicon.ico").is_file())
+
+    def test_multiple_targets_get_suffixed_names(self):
+        pkg, _ = self._package()
+        common = _make_common_dir(self.tmp)
+        bin_dir = self.tmp / "bin"
+        bin_dir.mkdir()
+        _write_tool(bin_dir, "swift", FAKE_SWIFT)
+        staging = self.tmp / "staging"
+        staging.mkdir()
+        source = {
+            "id": "pkg", "type": "local", "path": "pkg",
+            "targets": ["Lib", "Other"],
+        }
+        with self.env_with(PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}"):
+            archives = build_docs._build_package_targets(
+                source, pkg, common, staging, ["swift"], os.environ.copy()
+            )
+        self.assertEqual(
+            [a.name for a in archives],
+            ["pkg-Lib.doccarchive", "pkg-Other.doccarchive"],
+        )
+
+
+class BuildSourceLocalEndToEnd(TempDirTestCase):
+    def _setup(self, **source_extra):
+        root = self.tmp / "root"
+        catalog = root / "pkg" / "Docs.docc"
+        catalog.mkdir(parents=True)
+        common = _make_common_dir(self.tmp)
+        staging = self.tmp / "staging"
+        staging.mkdir()
+        source = {
+            "id": "pkg", "type": "local", "path": "pkg",
+            "docc_catalog": "Docs.docc", **source_extra,
+        }
+        return root, common, staging, source
+
+    def _build(self, root, common, staging, source):
+        return build_docs.build_source(
+            source, root, self.tmp / "ws", common, staging,
+            self.fake_docc(), os.environ.copy(),
+        )
+
+    def test_local_source_builds_catalog(self):
+        root, common, staging, source = self._setup()
+        archives, entry = self._build(root, common, staging, source)
+        self.assertEqual(archives, [staging / "pkg.doccarchive"])
+        self.assertTrue(archives[0].is_dir())
+        self.assertEqual(entry["id"], "pkg")
+        self.assertEqual(entry["type"], "local")
+
+    def test_missing_local_path_raises(self):
+        root, common, staging, source = self._setup(path="nope")
+        with self.assertRaises(RuntimeError):
+            self._build(root, common, staging, source)
+
+    def test_unknown_type_raises(self):
+        root, common, staging, source = self._setup(type="bogus")
+        with self.assertRaises(RuntimeError):
+            self._build(root, common, staging, source)
+
+    def test_source_env_and_docs_root_reach_preflight(self):
+        root, common, staging, source = self._setup(
+            env={"MY_FLAG": "1"},
+            preflight='echo "$MY_FLAG:$DOCS_ROOT" > "$PWD/preflight.out"',
+        )
+        self._build(root, common, staging, source)
+        written = (root / "pkg" / "preflight.out").read_text().strip()
+        self.assertEqual(written, f"1:{root}")
+
+    def test_failing_preflight_raises(self):
+        root, common, staging, source = self._setup(preflight="exit 3")
+        with self.assertRaises(subprocess.CalledProcessError):
+            self._build(root, common, staging, source)
+
+
+def _option(call, flag):
+    """Return the argument that follows `flag` in a logged docc call."""
+    return call[call.index(flag) + 1]
+
+
+class MergeArchivesEndToEnd(TempDirTestCase):
+    def _merge(self, out_name):
+        log = self.tmp / "docc.log"
+        archive = self.tmp / "a.doccarchive"
+        archive.mkdir()
+        with self.env_with(FAKE_DOCC_LOG=str(log)):
+            build_docs.merge_archives(
+                [archive], self.tmp / out_name, self.fake_docc(),
+                landing_page_name="Swift Documentation",
+            )
+        return self.docc_calls(log)[0]
+
+    def test_passes_landing_page_name_kind_and_style(self):
+        call = self._merge("6.2")
+        self.assertEqual(call[0], "merge")
+        self.assertEqual(_option(call, "--synthesized-landing-page-name"), "Swift")
+        self.assertEqual(_option(call, "--synthesized-landing-page-kind"), "Project")
+        self.assertEqual(_option(call, "--synthesized-landing-page-topics-style"), "list")
+
+    def test_replaces_existing_output(self):
+        out = self.tmp / "out"
+        (out / "stale").mkdir(parents=True)
+        self._merge("out")
+        self.assertFalse((out / "stale").exists())
+
+
+class TransformStaticHostingArguments(TempDirTestCase):
+    def test_passes_hosting_base_path_and_replaces_in_place(self):
+        log = self.tmp / "docc.log"
+        archive = self.tmp / "main.doccarchive"
+        archive.mkdir()
+        (archive / "index.html").write_text("ORIGINAL")
+        with self.env_with(FAKE_DOCC_LOG=str(log)):
+            build_docs.transform_static_hosting(archive, "docs/main", self.fake_docc())
+        call = self.docc_calls(log)[0]
+        self.assertEqual(call[:2], ["process-archive", "transform-for-static-hosting"])
+        self.assertEqual(_option(call, "--hosting-base-path"), "docs/main")
+        self.assertNotEqual((archive / "index.html").read_text(), "ORIGINAL")
+
+
+class FinalizeCombinedArchiveFailures(TempDirTestCase):
+    def _finalize(self, slug="main", **kwargs):
+        src = self.tmp / "src.doccarchive"
+        (src / "data").mkdir(parents=True, exist_ok=True)
+        out = self.tmp / "out"
+        out.mkdir(exist_ok=True)
+        return build_docs._finalize_combined_archive(
+            [src], out, slug, self.fake_docc(), [], **kwargs
+        )
+
+    def test_merge_failure_records_only_the_merge(self):
+        with self.env_with(FAKE_DOCC_FAIL_ON="merge"):
+            succeeded, failed = self._finalize()
+        self.assertEqual((succeeded, failed), ([], ["combined-merge"]))
+
+    def test_transform_failure_records_only_the_transform(self):
+        with self.env_with(FAKE_DOCC_FAIL_ON="process-archive"):
+            succeeded, failed = self._finalize()
+        self.assertEqual(
+            succeeded,
+            ["combined-merge", "eyebrow-suppression", "language-toggle-suppression"],
+        )
+        self.assertEqual(failed, ["static-hosting-transform"])
+
+    def test_landing_page_name_does_not_depend_on_the_version(self):
+        for slug in ("main", "6.2"):
+            with self.subTest(slug=slug):
+                log = self.tmp / f"docc-{slug}.log"
+                with self.env_with(FAKE_DOCC_LOG=str(log)):
+                    self._finalize(slug=slug)
+                merge = self.docc_calls(log)[0]
+                self.assertEqual(
+                    _option(merge, "--synthesized-landing-page-name"), "Swift"
+                )
+
+
+class FinalizeCombinedArchiveFeatures(TempDirTestCase):
+    def _finalize(self, **kwargs):
+        src = self.tmp / "src.doccarchive"
+        (src / "data").mkdir(parents=True, exist_ok=True)
+        out = self.tmp / "out"
+        out.mkdir(exist_ok=True)
+        return build_docs._finalize_combined_archive(
+            [src], out, "main", self.fake_docc(), [], **kwargs
+        ), out / "main"
+
+    def test_canonical_link_injection_runs_when_configured(self):
+        (succeeded, failed), combined = self._finalize(
+            canonical_base_url="https://docs.swift.org/latest"
+        )
+        self.assertEqual(failed, [])
+        self.assertEqual(succeeded[-1], "canonical-link-injection")
+        self.assertIn("canonical", (combined / "index.html").read_text())
+
+    def test_canonical_link_injection_is_skipped_when_not_configured(self):
+        (succeeded, failed), combined = self._finalize()
+        self.assertEqual(failed, [])
+        self.assertNotIn("canonical-link-injection", succeeded)
+        self.assertNotIn("canonical", (combined / "index.html").read_text())
+
+    def _navigation(self, indexed_modules):
+        index = {
+            "schemaVersion": {"major": 0, "minor": 1, "patch": 2},
+            "interfaceLanguages": {"swift": [{
+                "title": "Swift Documentation",
+                "path": "/documentation",
+                "type": "module",
+                "children": [
+                    {"type": "module", "title": t, "path": p}
+                    for t, p in indexed_modules
+                ],
+            }]},
+        }
+        index_file = self.tmp / "merged-index.json"
+        index_file.write_text(json.dumps(index))
+        navigation = {
+            "version": 1,
+            "groups": [{"title": "Lang", "modules": [
+                {"source": "a", "path": "/documentation/swift"},
+            ]}],
+            "hidden": [],
+        }
+        return index_file, navigation
+
+    def test_navigator_curation_succeeds_when_every_module_is_placed(self):
+        index_file, navigation = self._navigation([("Swift", "/documentation/swift")])
+        with self.env_with(FAKE_DOCC_MERGE_INDEX=str(index_file)):
+            (succeeded, failed), _ = self._finalize(navigation=navigation)
+        self.assertEqual(failed, [])
+        self.assertEqual(succeeded[:2], ["combined-merge", "navigator-curation"])
+
+    def test_navigator_curation_fails_on_an_unplaced_module(self):
+        index_file, navigation = self._navigation([
+            ("Swift", "/documentation/swift"),
+            ("Extra", "/documentation/extra"),
+        ])
+        with self.env_with(FAKE_DOCC_MERGE_INDEX=str(index_file)):
+            (succeeded, failed), _ = self._finalize(navigation=navigation)
+        self.assertEqual(succeeded, ["combined-merge"])
+        self.assertEqual(failed, ["navigator-curation"])
+
+    def test_shared_favicons_survive_the_static_hosting_transform(self):
+        common = _make_common_dir(self.tmp)
+        with self.env_with(FAKE_DOCC_CLOBBER_FAVICONS="1"):
+            (succeeded, failed), combined = self._finalize(common_dir=common)
+        self.assertEqual(failed, [])
+        self.assertEqual((combined / "favicon.ico").read_bytes(), b"ico")
+        self.assertEqual((combined / "favicon.svg").read_text(), "<svg/>")
+
+
+class BuildDoccCatalogEndToEnd(TempDirTestCase):
+    def _convert(self, graph_dir_name=None, populate=True, extra_flags=None):
+        common = _make_common_dir(self.tmp)
+        source_dir = self.tmp / "checkout"
+        (source_dir / "Foo.docc").mkdir(parents=True)
+        source = {"id": "foo", "docc_catalog": "Foo.docc"}
+        if extra_flags:
+            source["extra_flags"] = extra_flags
+        if graph_dir_name:
+            source["additional_symbol_graph_dir"] = graph_dir_name
+            graph_dir = source_dir / graph_dir_name
+            graph_dir.mkdir(parents=True)
+            if populate:
+                (graph_dir / "Foo.symbols.json").write_text("{}")
+        staging = self.tmp / "staging"
+        staging.mkdir(exist_ok=True)
+        log = self.tmp / "docc.log"
+        with self.env_with(FAKE_DOCC_LOG=str(log)):
+            archives = build_docs._build_docc_catalog(
+                source, source_dir, common, staging, self.fake_docc(), os.environ.copy()
+            )
+        return archives, self.docc_calls(log), source_dir
+
+    def test_passes_the_symbol_graph_dir_before_extra_flags(self):
+        archives, calls, source_dir = self._convert(
+            graph_dir_name=".build/symbols/Foo", extra_flags=["--final-flag"]
+        )
+        call = calls[0]
+        self.assertEqual(
+            _option(call, "--additional-symbol-graph-dir"),
+            str(source_dir / ".build/symbols/Foo"),
+        )
+        self.assertLess(
+            call.index("--additional-symbol-graph-dir"), call.index("--final-flag")
+        )
+        self.assertTrue(archives[0].is_dir())
+
+    def test_omits_the_flag_when_not_configured(self):
+        _, calls, _ = self._convert()
+        self.assertNotIn("--additional-symbol-graph-dir", calls[0])
+
+    def test_missing_symbol_graph_dir_fails_before_running_docc(self):
+        common = _make_common_dir(self.tmp)
+        source_dir = self.tmp / "checkout"
+        (source_dir / "Foo.docc").mkdir(parents=True)
+        source = {
+            "id": "foo", "docc_catalog": "Foo.docc",
+            "additional_symbol_graph_dir": "graphs",
+        }
+        log = self.tmp / "docc.log"
+        with self.env_with(FAKE_DOCC_LOG=str(log)):
+            with self.assertRaises(RuntimeError) as ctx:
+                build_docs._build_docc_catalog(
+                    source, source_dir, common, self.tmp, self.fake_docc(),
+                    os.environ.copy(),
+                )
+        self.assertIn("graphs", str(ctx.exception))
+        self.assertEqual(self.docc_calls(log), [])
+
+    def test_empty_symbol_graph_dir_fails_before_running_docc(self):
+        with self.assertRaises(RuntimeError):
+            self._convert(graph_dir_name="graphs", populate=False)
+
+
+@unittest.skipUnless(shutil.which("git"), "requires git")
+class BuildSourceReuseCheckoutEndToEnd(TempDirTestCase):
+    def _sources(self):
+        return [
+            {
+                "id": "first", "type": "git", "repo": "https://x/y.git",
+                "ref": "release/6.4.x", "docc_catalog": "A.docc",
+            },
+            {
+                "id": "second", "type": "git", "reuse_checkout": "first",
+                "docc_catalog": "B.docc",
+            },
+        ]
+
+    def _build(self, workspace, sources, source):
+        common = _make_common_dir(self.tmp)
+        staging = self.tmp / "staging"
+        staging.mkdir(exist_ok=True)
+        return build_docs.build_source(
+            source, self.tmp, workspace, common, staging, self.fake_docc(),
+            os.environ.copy(), sources=sources,
+        )
+
+    def test_builds_from_the_named_checkout_and_records_its_ref_and_commit(self):
+        workspace = self.tmp / "ws"
+        checkout = workspace / "first"
+        (checkout / "B.docc").mkdir(parents=True)
+        _git(checkout, "init", "--quiet", "-b", "main")
+        _git(checkout, "commit", "--quiet", "--allow-empty", "-m", "init")
+        commit = _git(checkout, "rev-parse", "HEAD")
+        sources = self._sources()
+        log = self.tmp / "docc.log"
+        with self.env_with(FAKE_DOCC_LOG=str(log)):
+            archives, entry = self._build(workspace, sources, sources[1])
+        convert = self.docc_calls(log)[0]
+        self.assertEqual(convert[1], str(checkout / "B.docc"))
+        self.assertEqual(entry["id"], "second")
+        self.assertEqual(entry["ref"], "release/6.4.x")
+        self.assertEqual(entry["commit"], commit)
+        self.assertTrue(archives[0].is_dir())
+
+    def test_missing_checkout_names_the_source_to_build_first(self):
+        sources = self._sources()
+        with self.assertRaises(RuntimeError) as ctx:
+            self._build(self.tmp / "ws", sources, sources[1])
+        self.assertIn("first", str(ctx.exception))
+
+
+class BuildSourceStripLinuxAvailabilityEndToEnd(TempDirTestCase):
+    def _build(self, **source_extra):
+        root = self.tmp / "root"
+        (root / "pkg" / "Docs.docc").mkdir(parents=True)
+        common = _make_common_dir(self.tmp)
+        staging = self.tmp / "staging"
+        staging.mkdir()
+        fixture = _make_archive_with_linux_platform(self.tmp, "Fixture.doccarchive")
+        source = {
+            "id": "pkg", "type": "local", "path": "pkg",
+            "docc_catalog": "Docs.docc", **source_extra,
+        }
+        with self.env_with(FAKE_DOCC_COPY=str(fixture)):
+            archives, _ = build_docs.build_source(
+                source, root, self.tmp / "ws", common, staging,
+                self.fake_docc(), os.environ.copy(),
+            )
+        payload = json.loads(
+            (archives[0] / "data" / "documentation" / "foosymbol.json").read_text()
+        )
+        return {p["name"] for p in payload["metadata"]["platforms"]}
+
+    def test_strips_only_linux_when_enabled(self):
+        self.assertEqual(
+            self._build(strip_linux_availability=True), {"Swift", "Xcode"}
+        )
+
+    def test_keeps_linux_when_not_enabled(self):
+        self.assertIn("Linux", self._build())
 
 
 if __name__ == "__main__":
