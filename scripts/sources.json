@@ -30,7 +30,7 @@
       "id": "swift-foundation-essentials",
       "type": "git",
       "repo": "https://github.com/swiftlang/swift-foundation.git",
-      "ref": "release/6.4.x",
+      "ref": "main",
       "docc_catalog": "Sources/FoundationEssentials/FoundationEssentials.docc",
       "preflight": "bash \"$DOCS_ROOT/scripts/extract-swift-foundation-symbol-graphs.sh\"",
       "additional_symbol_graph_dir": ".build/symbols/FoundationEssentials"
